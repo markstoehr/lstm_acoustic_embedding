@@ -57,7 +57,7 @@ class LSTM(object):
         if output_type == "last":
             self.output = hidden_features[-1]
         else:
-            self.output = hidden_feaures
+            self.output = hidden_features
             
         
 def lstm_function(state_below, n_hidden, W, U, b, prefix="lstm"):
@@ -360,7 +360,7 @@ def main():
     x = tensor.matrix("x", dtype=LSTMTYPE)
     n_in = 3
     n_hidden = 2
-    lstm = LSTM(rng, x, n_in, n_hidden)
+    lstm = LSTM(rng, x, n_in, n_hidden, output_type="full")
     f = theano.function(inputs=[x], outputs=lstm.output)
 
     n_data = 10
@@ -370,7 +370,7 @@ def main():
     U = lstm.U.get_value()
     b = lstm.b.get_value()
     h0_numpy = lstm_numpy(x0, W, U, b)
-    import pdb; pdb.set_trace()
+    numpy.testing.assert_array_almost_equal(h0, h0_numpy)
     
 if __name__ == "__main__":
     main()
