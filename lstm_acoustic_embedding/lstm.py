@@ -1,0 +1,376 @@
+"""LSTM layer in theano."""
+
+from __future__ import division
+import numpy
+import theano
+from theano import tensor
+from theano.tensor import nnet
+import mlp
+import utils
+
+SEED = 123
+LSTMTYPE = 'float32'
+numpy.random.seed(SEED)
+
+class LSTM(object):
+    """
+    Long short term memory network.
+    Attributes:
+    """
+    def __init__(self, rng, input, n_in, n_hidden, W=None, U=None, b=None,
+
+                 output_type="last", prefix="lstm"):
+        """
+        initialization for hidden is just done at the zero level
+        """
+        self.input = input
+        self.n_hidden = n_hidden
+        self.n_in = n_in
+        self.prefix = prefix
+        if W is None or U is None or b is None:
+            WU_values = numpy.concatenate(
+                [ortho_weight(self.n_hidden + self.n_in)[:,
+                                                               :self.n_hidden],
+                 ortho_weight(self.n_hidden + self.n_in)[:,
+                                                               :self.n_hidden],
+                 ortho_weight(self.n_hidden + self.n_in)[:,
+                                                               :self.n_hidden],
+                 ortho_weight(self.n_hidden + self.n_in)[:,
+                                                               :self.n_hidden],
+                 ], axis=1)
+            W_values = WU_values[:self.n_in]
+            U_values = WU_values[self.n_in:]
+            W = theano.shared(value=W_values, name="%s_W" % prefix,
+                              borrow=True)
+            U = theano.shared(value=U_values, name="%s_U" % prefix,
+                              borrow=True)
+            b_values = numpy.zeros(4 * self.n_hidden, dtype=LSTMTYPE)
+            b = theano.shared(value=b_values, name="%s_b" % prefix,
+                              borrow=True)
+        self.parameters = [W, U, b]
+        self.W = W
+        self.U = U
+        self.b = b
+        self.input = input
+        hidden_features = lstm_function(self.input, self.n_hidden, self.W, self.U, self.b,
+                                        prefix=self.prefix)
+        if output_type == "last":
+            self.output = hidden_features[-1]
+        else:
+            self.output = hidden_feaures
+            
+        
+def lstm_function(state_below, n_hidden, W, U, b, prefix="lstm"):
+    def _slice(_x, n, dim):
+        return _x[n*dim:(n+1) * dim]
+
+    def _step(x_, h_, c_):
+        preact = tensor.dot(h_, U)
+        preact += x_
+
+        i = nnet.sigmoid(_slice(preact, 0, n_hidden))
+        f = nnet.sigmoid(_slice(preact, 1, n_hidden))
+        o = nnet.sigmoid(_slice(preact, 2, n_hidden))
+        c = nnet.sigmoid(_slice(preact, 3, n_hidden))
+
+        c = f * c_ + i * c
+        h = o * tensor.tanh(c)
+        return h, c
+
+    init_hidden = tensor.alloc(numpy_floatX(0.), n_hidden)
+    state_below = tensor.dot(state_below, W) + b
+    rval, updates = theano.scan(_step,
+                                sequences=[state_below],
+                                outputs_info=[init_hidden,
+                                              tensor.alloc(numpy_floatX(0.),
+                                                           n_hidden)],
+                                name=_p(prefix, '_layers'))
+    return rval[0]
+
+
+        
+def symbolic_multilayer_lstm(input, parameters, n_hiddens, hidden_acts,
+                             init_hidden=None, prefix="lstm"):
+    def _slice(_x, n, dim):
+        return _x[n*dim:(n+1) * dim]
+
+    def _step(x_, h_, c_):
+        preact = tensor.dot(tensor.concatenate((h_, input_layer(x_, h_))), W)
+        preact += b
+
+        i = nnet.sigmoid(_slice(preact, 0, n_hidden))
+        f = nnet.sigmoid(_slice(preact, 1, n_hidden))
+        o = nnet.sigmoid(_slice(preact, 2, n_hidden))
+        c = nnet.sigmoid(_slice(preact, 3, n_hidden))
+
+        c = f * c_ + i * c
+        h = o * tensor.tanh(c)
+        return h, c
+
+    if init_hidden is None:
+        init_hidden = tensor.alloc(numpy_floatX(0.), n_hidden)
+
+    rval, updates = theano.scan(_step,
+                                sequences=[input],
+                                outputs_info=[init_hidden,
+                                              tensor.alloc(numpy_floatX(0.),
+                                                           n_hidden)],
+                                name=_p(prefix, '_layers'))
+    return rval[0]
+
+            
+            
+class LSTMLayer(object):
+    """LSTM class."""
+
+    def __init__(self, rng, input, input_frame_shape, n_hidden,
+                 init_hidden=None,
+                 input_layer=None, input_parameters=None, W=None,
+                 b=None, prefix="lstm"):
+        """Initialize symbolic parameters and expressions for LSTM.  Transition layer is
+        a potentially non-linear combination of the current LSTM hidden state
+        and the observation vector, this allows us to handle a 2D lstm and multiple iterations.
+
+        transition_layer should be a function that takes input, trans_W, trans_b, activation=None, prefix
+        """
+        self.n_hidden = n_hidden
+        self.prefix = prefix
+        
+        if input_layer is None:
+            input_layer = lambda input_frame, hidden_frame: tensor.flatten(input_frame)
+            input_parameters = []
+            
+        self.input_layer = input_layer
+        self.input_parameters = input_parameters
+        
+        if W is None:
+            input_frame_dim = int(numpy.prod(input_frame_shape))
+            W_values = numpy.concatenate(
+                [ortho_weight(self.n_hidden + input_frame_dim)[:,
+                                                               :self.n_hidden],
+                 ortho_weight(self.n_hidden + input_frame_dim)[:,
+                                                               :self.n_hidden],
+                 ortho_weight(self.n_hidden + input_frame_dim)[:,
+                                                               :self.n_hidden],
+                 ortho_weight(self.n_hidden + input_frame_dim)[:,
+                                                               :self.n_hidden],
+                 ], axis=1)
+            
+            W = theano.shared(value=W_values, name="%s_W" % prefix,
+                              borrow=True)
+            
+        self.W = W
+
+        if b is None:
+            b_values = numpy.zeros(4 * self.n_hidden, dtype=LSTMTYPE)
+            b = theano.shared(value=b_values, name="%s_b" % prefix,
+                              borrow=True)
+        self.b = b
+        self.lstm_parameters = [self.W, self.b] + self.input_parameters
+        self.input = input
+        self.init_hidden = init_hidden
+        self.output = symbolic_lstm(self.input, self.W, self.b, self.n_hidden,
+                                    self.input_layer,
+                                    init_hidden=self.init_hidden)
+
+
+def symbolic_lstm(input, W, b, n_hidden, input_layer, init_hidden=None, prefix="lstm"):
+    def _slice(_x, n, dim):
+        return _x[n*dim:(n+1) * dim]
+
+    def _step(x_, h_, c_):
+        preact = tensor.dot(tensor.concatenate((h_, input_layer(x_, h_))), W)
+        preact += b
+
+        i = nnet.sigmoid(_slice(preact, 0, n_hidden))
+        f = nnet.sigmoid(_slice(preact, 1, n_hidden))
+        o = nnet.sigmoid(_slice(preact, 2, n_hidden))
+        c = nnet.sigmoid(_slice(preact, 3, n_hidden))
+
+        c = f * c_ + i * c
+        h = o * tensor.tanh(c)
+        return h, c
+
+    if init_hidden is None:
+        init_hidden = tensor.alloc(numpy_floatX(0.), n_hidden)
+
+    rval, updates = theano.scan(_step,
+                                sequences=[input],
+                                outputs_info=[init_hidden,
+                                              tensor.alloc(numpy_floatX(0.),
+                                                           n_hidden)],
+                                name=_p(prefix, '_layers'))
+    return rval[0]
+
+
+def numpy_floatX(data):
+    return numpy.asarray(data, dtype=LSTMTYPE)
+
+def init_params(options):
+    """
+    Global (not LSTM) parameter. For the embeding and the classifier.
+    """
+    params = OrderedDict()
+    # embedding
+    params = param_init_lstm(options,
+                             params,
+                             prefix=options['lstm'])
+    return params
+
+def ortho_weight(ndim):
+    W = numpy.random.randn(ndim, ndim)
+    u, s, v = numpy.linalg.svd(W)
+    return u.astype(LSTMTYPE)
+
+def _p(pp, name):
+    return '%s_%s' % (pp, name)
+
+
+def param_init_lstm(options, params, prefix='lstm'):
+    """Init the LSTM parameters."""
+    W = numpy.concatenate([ortho_weight(options['n_hidden_dim']),
+                           ortho_weight(options['n_hidden_dim']),
+                           ortho_weight(options['n_hidden_dim']),
+                           ortho_weight(options['n_hidden_dim'])], axis=1)
+    params[_p(prefix, 'W')] = W
+    U = numpy.concatenate([ortho_weight(options['n_hidden_dim']),
+                           ortho_weight(options['n_hidden_dim']),
+                           ortho_weight(options['n_hidden_dim']),
+                           ortho_weight(options['n_hidden_dim'])], axis=1)
+    params[_p(prefix, 'U')] = U
+    b = numpy.zeros((4 * options['n_hidden_dim'],))
+    params[_p(prefix, 'b')] = b.astype(LSTMTYPE)
+
+    return params
+
+
+def init_tparams(params):
+    tparams = OrderedDict()
+    for kk, pp in params.iteritems():
+        tparams[kk] = theano.shared(params[kk], name=kk, borrow=True)
+    return tparams
+
+
+def lstm_layer(tparams, state_below, init_state, options, prefix='lstm', mask=None):
+    """Compute LSTM over a sequence and producing."""
+    n_data = state_below.shape[0]
+    
+    def _slice(_x, n, dim):
+        return _x[:, n * dim:(n + 1) * dim]
+
+    def _step(m_, x_, h_, c_):
+        preact = tensor.dot(h_, tparams[_p(prefix, 'U')])
+        preact += x_
+
+        i = tensor.nnet.sigmoid(_slice(preact, 0, options['n_hidden_dim']))
+        f = tensor.nnet.sigmoid(_slice(preact, 1, options['n_hidden_dim']))
+        o = tensor.nnet.sigmoid(_slice(preact, 2, options['n_hidden_dim']))
+        c = tensor.tanh(_slice(preact, 3, options['n_hidden_dim']))
+
+        c = f * c_ + i * c
+        c = m_[:, None] * c + (1. - m_)[:, None] * c_
+
+        h = o * tensor.tanh(c)
+        h = m_[:, None] * h + (1. - m_)[:, None] * h_
+
+        return h, c
+
+    state_below = (tensor.dot(state_below, tparams[_p(prefix, 'W')]) +
+                   tparams[_p(prefix, 'b')])
+
+    n_hidden_dim = options['n_hidden_dim']
+    rval, updates = theano.scan(_step,
+                                sequences=state_below,
+                                outputs_info=[init_state,
+                                              tensor.alloc(numpy_floatX(0.),
+                                                           n_hidden_dim)],
+                                name=_p(prefix, '_layers'))
+    
+    return rval
+
+
+def build_model(tparams, options):
+    trng = RandomStreams(SEED)
+
+    x = tensor.matrix('x', dtype=LSTMTYPE)
+    h = tensor.vector('h', dtype=LSTMTYPE)
+    # mask = tensor.matrix('mask', dtype=config.floatX)
+    # y = tensor.vector('y', dtype='')
+
+    n_data = x.shape[0]
+
+    lstm_hidden = lstm_layer(tparams, x, h, options, prefix=options['lstm'])
+
+    return x, h, lstm_hidden
+
+def old_main():
+    x, h, lstm_out, params, tparams = construct_lstm_1d()
+    import pdb; pdb.set_trace()
+
+    x = tensor.matrix('x', dtype='float32')
+    h = tensor.vector('h', dtype='float32')
+    rng = numpy.random.RandomState(0)
+    ndim = 3
+    W = theano.shared(rng.randn(ndim, ndim).astype(numpy.float32),
+                      name="W", borrow=True)
+    b = theano.shared(rng.randn(ndim).astype(numpy.float32), name="b",
+                      borrow=True)
+    components, updates = theano.scan(fn=lambda x, h: nnet.relu(tensor.dot(W,h) + x + b),
+                outputs_info=h,
+                                      sequences=x)
+    calculate_hiddens = theano.function(inputs=[x, h], outputs=[components])
+    ntimes = 39
+    x = rng.randn(ntimes, ndim).astype(numpy.float32)
+    h = rng.randn(ndim).astype(numpy.float32)
+    hs = calculate_hiddens(x, h)
+
+
+def construct_lstm_1d():
+    params = init_params(model_options)
+    tparams = init_tparams(params)
+
+    x, h, lstm_out = build_model(tparams, model_options)
+    return x, h, lstm_out, params, tparams
+
+def lstm_numpy(x, W, U, b):
+    z = numpy.dot(x, W) + b
+    n_hidden = b.shape[0]/4
+    h = numpy.zeros((x.shape[0], n_hidden), dtype=x.dtype)
+    prev_h = numpy.zeros(n_hidden, dtype=x.dtype)
+    prev_c = numpy.zeros(n_hidden, dtype=x.dtype)
+    
+    def _slice(_x, n, dim):
+        return _x[n*dim:(n+1) * dim]
+    for n in range(len(h)):
+        preact = numpy.dot(prev_h, U) + z[n]
+        i = utils.sigmoid(_slice(preact, 0, n_hidden))
+        f = utils.sigmoid(_slice(preact, 1, n_hidden))
+        o = utils.sigmoid(_slice(preact, 2, n_hidden))
+        c = utils.sigmoid(_slice(preact, 3, n_hidden))
+
+        c = f * prev_c + i * c
+        h[n] = o * utils.tanh(c)
+        prev_c = c
+        prev_h = h[n]
+    return h
+        
+
+def main():
+    rng = numpy.random.RandomState(0)
+    x = tensor.matrix("x", dtype=LSTMTYPE)
+    n_in = 3
+    n_hidden = 2
+    lstm = LSTM(rng, x, n_in, n_hidden)
+    f = theano.function(inputs=[x], outputs=lstm.output)
+
+    n_data = 10
+    x0 = rng.randn(n_data, n_in).astype(LSTMTYPE)
+    h0 = f(x0)
+    W = lstm.W.get_value()
+    U = lstm.U.get_value()
+    b = lstm.b.get_value()
+    h0_numpy = lstm_numpy(x0, W, U, b)
+    import pdb; pdb.set_trace()
+    
+if __name__ == "__main__":
+    main()
