@@ -12,6 +12,48 @@ SEED = 123
 LSTMTYPE = 'float32'
 numpy.random.seed(SEED)
 
+class MultiLayerLSTM(object):
+    """
+    LSTM with multiple layers.
+    """
+    def __init__(self, rng, input, n_in, n_hiddens, parameters=None, output_type="last", prefix="lstms"):
+        self.n_layers = len(n_hiddens)
+        self.layers = []
+        self.input = input
+        self.n_in = n_in
+        self.prefix = prefix
+        # reverse and copy because we want to pop off the parameters
+        if parameters is not None:
+            cur_parameters = list(parameters)[::-1]
+        else:
+            cur_parameters = None
+            
+        self.parameters = []
+        cur_in = n_in
+        for layer_id, n_hidden in enumerate(n_hiddens):
+            cur_output_type = output_type if layer_id == self.n_layers-1 else "full"
+            if cur_parameters is None:
+                W = None
+                U = None
+                b = None
+            else:
+                W = cur_parameters.pop()
+                U = cur_parameters.pop()
+                b = cur_parameters.pop()
+
+            if self.layers:
+                input = self.layers[-1].output
+                
+            self.layers.append(
+                LSTM(rng, input, cur_in, n_hidden, output_type=cur_output_type,
+                     prefix="%s_%d" % (self.prefix, layer_id)))
+            self.parameters.append(self.layers[-1].W)
+            self.parameters.append(self.layers[-1].U)
+            self.parameters.append(self.layers[-1].b)
+            cur_in = n_hidden
+        self.output = self.layers[-1].output
+        
+
 class LSTM(object):
     """
     Long short term memory network.
@@ -353,9 +395,8 @@ def lstm_numpy(x, W, U, b):
         prev_c = c
         prev_h = h[n]
     return h
-        
 
-def main():
+def test_lstm():
     rng = numpy.random.RandomState(0)
     x = tensor.matrix("x", dtype=LSTMTYPE)
     n_in = 3
@@ -371,6 +412,27 @@ def main():
     b = lstm.b.get_value()
     h0_numpy = lstm_numpy(x0, W, U, b)
     numpy.testing.assert_array_almost_equal(h0, h0_numpy)
-    
+
+def main():
+    rng = numpy.random.RandomState(0)
+    x = tensor.matrix("x", dtype=LSTMTYPE)
+    n_in = 3
+    n_hiddens = [10, 10]
+    multi_lstm = MultiLayerLSTM(rng, x, n_in, n_hiddens, output_type="last")
+    f = theano.function(inputs=[x], outputs=multi_lstm.output)
+
+    n_data = 10
+    x0 = rng.randn(n_data, n_in).astype(LSTMTYPE)
+    h1 = f(x0)
+    W0 = multi_lstm.layers[0].W.get_value()
+    U0 = multi_lstm.layers[0].U.get_value()
+    b0 = multi_lstm.layers[0].b.get_value()
+    W1 = multi_lstm.layers[1].W.get_value()
+    U1 = multi_lstm.layers[1].U.get_value()
+    b1 = multi_lstm.layers[1].b.get_value()
+    h0_numpy = lstm_numpy(x0, W0, U0, b0)
+    h1_numpy = lstm_numpy(h0_numpy, W1, U1, b1)[-1]
+    numpy.testing.assert_array_almost_equal(h1, h1_numpy)
+
 if __name__ == "__main__":
     main()
