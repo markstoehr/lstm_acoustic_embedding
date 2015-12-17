@@ -20,11 +20,13 @@ import os
 import scipy.spatial.distance as distance
 import sys
 import theano
-import theano.tensor as T
+from theano import tensor
 
 sys.path.append(path.join("..", "..", "src", "couscous"))
 
-from couscous import siamese, theano_utils, training
+from couscous import theano_utils, training
+import siamese
+
 import apply_layers
 import data_io
 import samediff
