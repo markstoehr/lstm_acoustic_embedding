@@ -7,9 +7,13 @@ from theano import tensor
 from theano.tensor import nnet
 import mlp
 import utils
+import pickle
+import os
+
+import data_io
 
 SEED = 123
-LSTMTYPE = 'float32'
+THEANOTYPE = "float64"
 numpy.random.seed(SEED)
 
 class MultiLayerLSTM(object):
@@ -45,14 +49,23 @@ class MultiLayerLSTM(object):
                 input = self.layers[-1].output
                 
             self.layers.append(
-                LSTM(rng, input, cur_in, n_hidden, output_type=cur_output_type,
+                LSTM(rng, input, cur_in, n_hidden, W=W, U=U, b=b, output_type=cur_output_type,
                      prefix="%s_%d" % (self.prefix, layer_id)))
             self.parameters.append(self.layers[-1].W)
             self.parameters.append(self.layers[-1].U)
             self.parameters.append(self.layers[-1].b)
             cur_in = n_hidden
         self.output = self.layers[-1].output
-        
+
+    def save(self, f):
+        """Pickle the model parameters to opened file `f`."""
+        for layer in self.layers:
+            layer.save(f)
+
+    def load(self, f):
+        """Load the model parameters from the opened pickle file `f`."""
+        for layer in self.layers:
+            layer.load(f)
 
 class LSTM(object):
     """
@@ -65,6 +78,7 @@ class LSTM(object):
         """
         initialization for hidden is just done at the zero level
         """
+        self.output_type = output_type
         self.input = input
         self.n_hidden = n_hidden
         self.n_in = n_in
@@ -86,7 +100,7 @@ class LSTM(object):
                               borrow=True)
             U = theano.shared(value=U_values, name="%s_U" % prefix,
                               borrow=True)
-            b_values = numpy.zeros(4 * self.n_hidden, dtype=LSTMTYPE)
+            b_values = numpy.zeros(4 * self.n_hidden, dtype=THEANOTYPE)
             b = theano.shared(value=b_values, name="%s_b" % prefix,
                               borrow=True)
         self.parameters = [W, U, b]
@@ -94,12 +108,31 @@ class LSTM(object):
         self.U = U
         self.b = b
         self.input = input
+        self.set_output()
+
+    def set_output(self):
         hidden_features = lstm_function(self.input, self.n_hidden, self.W, self.U, self.b,
                                         prefix=self.prefix)
-        if output_type == "last":
+        if self.output_type == "last":
             self.output = hidden_features[-1]
         else:
             self.output = hidden_features
+
+    def save(self, f):
+        """Pickle the model parameters to opened file `f`."""
+        pickle.dump(self.W.get_value(borrow=True), f, -1)
+        pickle.dump(self.U.get_value(borrow=True), f, -1)
+        pickle.dump(self.b.get_value(borrow=True), f, -1)
+
+    def load(self, f):
+        """Load the model parameters from the opened pickle file `f`."""
+        self.W.set_value(pickle.load(f), borrow=True)
+        self.U.set_value(pickle.load(f), borrow=True)
+        self.b.set_value(pickle.load(f), borrow=True)
+        # self.n_in, self.n_hidden = self.W.get_value(borrow=True).shape
+        # self.parameters = [self.W, self.U, self.b]
+        # self.set_output()
+        
             
         
 def lstm_function(state_below, n_hidden, W, U, b, prefix="lstm"):
@@ -204,7 +237,7 @@ class LSTMLayer(object):
         self.W = W
 
         if b is None:
-            b_values = numpy.zeros(4 * self.n_hidden, dtype=LSTMTYPE)
+            b_values = numpy.zeros(4 * self.n_hidden, dtype=THEANOTYPE)
             b = theano.shared(value=b_values, name="%s_b" % prefix,
                               borrow=True)
         self.b = b
@@ -246,7 +279,7 @@ def symbolic_lstm(input, W, b, n_hidden, input_layer, init_hidden=None, prefix="
 
 
 def numpy_floatX(data):
-    return numpy.asarray(data, dtype=LSTMTYPE)
+    return numpy.asarray(data, dtype=THEANOTYPE)
 
 def init_params(options):
     """
@@ -262,7 +295,7 @@ def init_params(options):
 def ortho_weight(ndim):
     W = numpy.random.randn(ndim, ndim)
     u, s, v = numpy.linalg.svd(W)
-    return u.astype(LSTMTYPE)
+    return u.astype(THEANOTYPE)
 
 def _p(pp, name):
     return '%s_%s' % (pp, name)
@@ -281,7 +314,7 @@ def param_init_lstm(options, params, prefix='lstm'):
                            ortho_weight(options['n_hidden_dim'])], axis=1)
     params[_p(prefix, 'U')] = U
     b = numpy.zeros((4 * options['n_hidden_dim'],))
-    params[_p(prefix, 'b')] = b.astype(LSTMTYPE)
+    params[_p(prefix, 'b')] = b.astype(THEANOTYPE)
 
     return params
 
@@ -334,8 +367,8 @@ def lstm_layer(tparams, state_below, init_state, options, prefix='lstm', mask=No
 def build_model(tparams, options):
     trng = RandomStreams(SEED)
 
-    x = tensor.matrix('x', dtype=LSTMTYPE)
-    h = tensor.vector('h', dtype=LSTMTYPE)
+    x = tensor.matrix('x', dtype=THEANOTYPE)
+    h = tensor.vector('h', dtype=THEANOTYPE)
     # mask = tensor.matrix('mask', dtype=config.floatX)
     # y = tensor.vector('y', dtype='')
 
@@ -398,14 +431,14 @@ def lstm_numpy(x, W, U, b):
 
 def test_lstm():
     rng = numpy.random.RandomState(0)
-    x = tensor.matrix("x", dtype=LSTMTYPE)
+    x = tensor.matrix("x", dtype=THEANOTYPE)
     n_in = 3
     n_hidden = 2
     lstm = LSTM(rng, x, n_in, n_hidden, output_type="full")
     f = theano.function(inputs=[x], outputs=lstm.output)
 
     n_data = 10
-    x0 = rng.randn(n_data, n_in).astype(LSTMTYPE)
+    x0 = rng.randn(n_data, n_in).astype(THEANOTYPE)
     h0 = f(x0)
     W = lstm.W.get_value()
     U = lstm.U.get_value()
@@ -413,16 +446,16 @@ def test_lstm():
     h0_numpy = lstm_numpy(x0, W, U, b)
     numpy.testing.assert_array_almost_equal(h0, h0_numpy)
 
-def main():
+def test_multilstm():
     rng = numpy.random.RandomState(0)
-    x = tensor.matrix("x", dtype=LSTMTYPE)
+    x = tensor.matrix("x", dtype=THEANOTYPE)
     n_in = 3
     n_hiddens = [10, 10]
     multi_lstm = MultiLayerLSTM(rng, x, n_in, n_hiddens, output_type="last")
     f = theano.function(inputs=[x], outputs=multi_lstm.output)
 
     n_data = 10
-    x0 = rng.randn(n_data, n_in).astype(LSTMTYPE)
+    x0 = rng.randn(n_data, n_in).astype(THEANOTYPE)
     h1 = f(x0)
     W0 = multi_lstm.layers[0].W.get_value()
     U0 = multi_lstm.layers[0].U.get_value()
@@ -434,5 +467,63 @@ def main():
     h1_numpy = lstm_numpy(h0_numpy, W1, U1, b1)[-1]
     numpy.testing.assert_array_almost_equal(h1, h1_numpy)
 
+    # testing the loss
+    cost = tensor.sum(multi_lstm.output**2)
+    loss = theano.function(inputs=[x], outputs=cost)
+    gradient = tensor.grad(cost, multi_lstm.parameters)
+    
+def test_multisaveload():
+    rng = numpy.random.RandomState(0)
+    x = tensor.matrix("x", dtype=THEANOTYPE)
+    n_in = 3
+    n_hiddens = [10, 10]
+    multi_lstm = MultiLayerLSTM(rng, x, n_in, n_hiddens, output_type="last")
+    f0 = theano.function(inputs=[x], outputs=multi_lstm.output)
+    save_file = data_io.smart_open("model.pkl.gz", "wb")
+    multi_lstm.save(save_file)
+    save_file.close()
+
+    n_in1 = 4
+    n_hiddens1 = [11, 11]
+    multi_lstm1 = MultiLayerLSTM(rng, x, n_in, n_hiddens, output_type="last")
+    load_file = data_io.smart_open("model.pkl.gz", "rb")
+    multi_lstm1.load(load_file)
+    load_file.close()
+    f1 = theano.function(inputs=[x], outputs=multi_lstm1.layers[0].output)
+    
+    n_data = 10
+    x0 = rng.randn(n_data, n_in).astype(THEANOTYPE)
+    import pdb; pdb.set_trace()
+
+def test_saveload():
+    rng = numpy.random.RandomState(0)
+    x = tensor.matrix("x", dtype=THEANOTYPE)
+    n_in = 3
+    n_hidden = 10
+    lstm = LSTM(rng, x, n_in, n_hidden, output_type="last")
+    n_data = 10
+    x0 = rng.randn(n_data, n_in).astype(THEANOTYPE)
+
+    f0 = theano.function(inputs=[x], outputs=lstm.output)
+    h0 = f0(x0)
+    save_file = data_io.smart_open("model.pkl.gz", "wb")
+    lstm.save(save_file)
+    save_file.close()
+
+    x1 = tensor.matrix("x1", dtype=THEANOTYPE)
+    lstm1 = LSTM(rng, x1, n_in, n_hidden, output_type="last")
+    load_file = data_io.smart_open("model.pkl.gz", "rb")
+    f1 = theano.function(inputs=[x1], outputs=lstm1.output)
+    h1 = f1(x0)
+    lstm1.load(load_file)
+    load_file.close()
+    h2 = f1(x0)
+    numpy.testing.assert_array_almost_equal(h0, h2)
+    
+def main():
+    test_lstm()
+    test_multilstm()
+    test_saveload()
+    
 if __name__ == "__main__":
     main()

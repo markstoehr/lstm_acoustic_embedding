@@ -16,7 +16,7 @@ import theano
 import theano.tensor as T
 
 import samediff
-THEANOTYPE = "float32"
+THEANOTYPE = "float64"
 logger = logging.getLogger(__name__)
 
 
@@ -197,8 +197,13 @@ def load_swbd_same_diff_nopadding(rng, data_dir):
         utt_ids = sorted(npz.keys())
         rng.shuffle(utt_ids)
         xs = [npz[i] for i in utt_ids]
-        ls = [len(x) for x in xs]
-        inds = np.cumsum(ls)
+        ls = np.asarray([len(x) for x in xs], dtype=int)
+        base_inds = np.cumsum(ls)
+        ends = theano.shared(base_inds, borrow=True)
+        base_begins = base_inds.copy()
+        base_begins[1:] = base_inds[:-1]
+        base_begins[0] = 0
+        begins = theano.shared(base_begins, borrow=True)
         # Get labels for each utterance
         labels = swbd_utts_to_labels(utt_ids)
 
@@ -208,7 +213,7 @@ def load_swbd_same_diff_nopadding(rng, data_dir):
             shared_x = theano.shared(np.asarray(np.vstack(xs), dtype=THEANOTYPE), borrow=True)
         except: import pdb; pdb.set_trace()
         # Create a tuple for this set and add to `data_sets`
-        datasets.append((shared_x, ls, inds, matches_vec, labels))
+        datasets.append((shared_x, begins, ends, matches_vec, labels))
 
     return datasets
 

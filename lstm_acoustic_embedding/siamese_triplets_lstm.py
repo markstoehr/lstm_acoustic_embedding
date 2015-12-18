@@ -24,24 +24,25 @@ from theano import tensor
 
 sys.path.append(path.join("..", "..", "src", "couscous"))
 
-from couscous import theano_utils, training
+from couscous import theano_utils
 import siamese
-
+import training
 import apply_layers
 import data_io
 import samediff
 
 logger = logging.getLogger(__name__)
-
+THEANOTYPE = "float64"
 
 #-----------------------------------------------------------------------------#
 #                           DEFAULT TRAINING OPTIONS                          #
 #-----------------------------------------------------------------------------#
 
 default_options_dict = {
-    "data_dir": "data/nonpadded_icassp15.0",
+    "data_dir": "../data/nonpadded_icassp15.0",
     # "data_dir": "data/tmp",
     "n_same_pairs": int(100e3), # if None, all same pairs are used
+    "n_hiddens": [712, 712],
     "rnd_seed": 42,
     "batch_size": 1024,
     "n_max_epochs": 20,
@@ -75,18 +76,17 @@ default_options_dict = {
 #                        TRAINING FUNCTIONS AND CLASSES                       #
 #-----------------------------------------------------------------------------#
 
-class BatchIteratorTriplets(object):
+class TripletIterator(object):
     """In every epoch the tokens for the different-pairs are sampled."""
     
-    def __init__(self, rng, matches_vec, batch_size,
-            sample_diff_every_epoch=True, n_same_pairs=None):
+    def __init__(self, rng, matches_vec, sample_diff_every_epoch=True,
+                 n_same_pairs=None):
         """
         If `n_same_pairs` is given, this number of same pairs is sampled,
         otherwise all same pairs are used.
         """
         self.rng = rng
         self.matches_vec = matches_vec
-        self.batch_size = batch_size
 
         self.same_matrix = distance.squareform(matches_vec)
         if n_same_pairs is None:
@@ -147,12 +147,12 @@ class BatchIteratorTriplets(object):
         else:
             x3_diff_indices = self.x3_diff_indices
 
-        n_batches = len(self.x1_same_indices) / self.batch_size
-        for i_batch in xrange(n_batches):
-            batch_x1_indices = self.x1_same_indices[i_batch*self.batch_size: (i_batch + 1)*self.batch_size]
-            batch_x2_indices = self.x2_same_indices[i_batch*self.batch_size: (i_batch + 1)*self.batch_size]
-            batch_x3_indices = x3_diff_indices[i_batch*self.batch_size: (i_batch + 1)*self.batch_size]
-            yield (batch_x1_indices, batch_x2_indices, batch_x3_indices)
+
+        for ind in range(len(self.x1_same_indices)):
+            batch_x1_ind = self.x1_same_indices[ind]
+            batch_x2_ind = self.x2_same_indices[ind]
+            batch_x3_ind = x3_diff_indices[ind]
+            yield (batch_x1_ind, batch_x2_ind, batch_x3_ind)
 
 
 def train_siamese_triplets_lstm(options_dict):
@@ -193,32 +193,21 @@ def train_siamese_triplets_lstm(options_dict):
     # Load and format data
 
     # Load into shared variables
-    datasets = data_io.load_swbd_same_diff(rng, options_dict["data_dir"])
-    train_x, train_matches_vec, train_labels = datasets[0]
-    dev_x, dev_matches_vec, dev_labels = datasets[1]
-    test_x, test_matches_vec, test_labels = datasets[2]
-
-    # Flatten data
-    d_in = 39*200
-    train_x = train_x.reshape((-1, d_in))
-    dev_x = dev_x.reshape((-1, d_in))
-    test_x = test_x.reshape((-1, d_in))
+    datasets = data_io.load_swbd_same_diff_nopadding(rng, options_dict["data_dir"])
+    train_x, train_begins, train_ends, train_matches_vec, train_labels = datasets[0]
+    dev_x, dev_begins, dev_ends, dev_matches_vec, dev_labels = datasets[1]
+    test_x, test_begins, test_ends, test_matches_vec, test_labels = datasets[2]
 
     # Make batch iterators
-    train_batch_iterator = BatchIteratorTriplets(
-        rng, train_matches_vec, options_dict["batch_size"],
-        n_same_pairs=options_dict["n_same_pairs"], sample_diff_every_epoch=True
-        )
-    validate_batch_iterator = BatchIteratorTriplets(
-        rng, dev_matches_vec, options_dict["batch_size"],
-        n_same_pairs=options_dict["n_same_pairs"],
-        sample_diff_every_epoch=False
-        )
-    test_batch_iterator = BatchIteratorTriplets(
-        rng, test_matches_vec, options_dict["batch_size"],
-        n_same_pairs=options_dict["n_same_pairs"],
-        sample_diff_every_epoch=False
-        )
+    train_triplet_iterator = TripletIterator(
+        rng, train_matches_vec, n_same_pairs=options_dict["n_same_pairs"],
+        sample_diff_every_epoch=True)
+    validate_triplet_iterator = TripletIterator(
+        rng, dev_matches_vec, n_same_pairs=options_dict["n_same_pairs"],
+        sample_diff_every_epoch=False)
+    test_triplet_iterator = TripletIterator(
+        rng, test_matches_vec, n_same_pairs=options_dict["n_same_pairs"],
+        sample_diff_every_epoch=False)
 
 
     # Setup model
@@ -226,22 +215,17 @@ def train_siamese_triplets_lstm(options_dict):
     logger.info("Building Siamese triplets LSTM")
 
     # Symbolic variables
-    x1 = T.matrix("x1")
-    x2 = T.matrix("x2")
-    x3 = T.matrix("x3")
-    x1_indices = T.ivector("x1_indices")
-    x2_indices = T.ivector("x2_indices")
-    x3_indices = T.ivector("x3_indices")
+    x1 = tensor.matrix("x1", dtype=THEANOTYPE)
+    x2 = tensor.matrix("x2", dtype=THEANOTYPE)
+    x3 = tensor.matrix("x3", dtype=THEANOTYPE)
+    x1_indices = tensor.iscalar("x1_indices")
+    x2_indices = tensor.iscalar("x2_indices")
+    x3_indices = tensor.iscalar("x3_indices")
 
     # Build model
     input_shape = (options_dict["batch_size"], 1, 39, 200)
-    model = siamese.SiameseTripletCNN(
-        rng, x1, x2, x3, input_shape,
-        conv_layer_specs=options_dict["conv_layer_specs"],
-        hidden_layer_specs=options_dict["hidden_layer_specs"],
-        srng=srng,
-        dropout_rates=options_dict["dropout_rates"],
-        )
+    model = siamese.SiameseTripletLSTM(
+        rng, x1, x2, x3, n_in=39, n_hiddens=options_dict["n_hiddens"])
     if options_dict["loss"] == "hinge_cos":
         if options_dict["dropout_rates"] is not None:
             loss = model.dropout_loss_hinge_cos(options_dict["margin"])
@@ -264,9 +248,9 @@ def train_siamese_triplets_lstm(options_dict):
         inputs=[x1_indices, x2_indices, x3_indices],
         outputs=outputs,
         givens={
-            x1: dev_x[x1_indices],
-            x2: dev_x[x2_indices],
-            x3: dev_x[x3_indices],
+            x1: dev_x[dev_begins[x1_indices]:dev_ends[x1_indices]],
+            x2: dev_x[dev_begins[x2_indices]:dev_ends[x2_indices]],
+            x3: dev_x[dev_begins[x3_indices]:dev_ends[x3_indices]],
             },
         mode=theano_mode,
         )
@@ -274,16 +258,16 @@ def train_siamese_triplets_lstm(options_dict):
         inputs=[x1_indices, x2_indices, x3_indices],
         outputs=outputs,
         givens={
-            x1: test_x[x1_indices],
-            x2: test_x[x2_indices],
-            x3: test_x[x3_indices],
+            x1: test_x[test_begins[x1_indices]:test_ends[x1_indices]],
+            x2: test_x[test_begins[x2_indices]:test_ends[x2_indices]],
+            x3: test_x[test_begins[x3_indices]:test_ends[x3_indices]],
             },
         mode=theano_mode,
         )
 
     # Gradients and training updates
     parameters = model.parameters
-    gradients = T.grad(loss, parameters)
+    gradients = tensor.grad(loss, parameters)
     learning_rule = options_dict["learning_rule"]
     if learning_rule["type"] == "adadelta":
         updates = training.learning_rule_adadelta(
@@ -302,9 +286,9 @@ def train_siamese_triplets_lstm(options_dict):
         outputs=outputs,
         updates=updates,
         givens={
-            x1: train_x[x1_indices],
-            x2: train_x[x2_indices],
-            x3: train_x[x3_indices],
+            x1: train_x[train_begins[x1_indices]:train_ends[x1_indices]],
+            x2: train_x[train_begins[x2_indices]:train_ends[x2_indices]],
+            x3: train_x[train_begins[x3_indices]:train_ends[x3_indices]],
             },
         mode=theano_mode,
         )
@@ -317,11 +301,11 @@ def train_siamese_triplets_lstm(options_dict):
     record_dict = training.train_fixed_epochs_with_validation(
         options_dict["n_max_epochs"],
         train_model=train_model,
-        train_batch_iterator=train_batch_iterator,
+        train_triplet_iterator=train_triplet_iterator,
         validate_model=validate_model,
-        validate_batch_iterator=validate_batch_iterator,
+        validate_triplet_iterator=validate_triplet_iterator,
         test_model=test_model,
-        test_batch_iterator=test_batch_iterator,
+        test_triplet_iterator=test_triplet_iterator,
         save_model_func=model.save,
         save_model_fn=path.join(options_dict["model_dir"], "model.pkl.gz"),
         record_dict_fn=record_dict_fn,
@@ -366,21 +350,17 @@ def load_siamese_triplets_lstm(options_dict):
     model_fn = path.join(options_dict["model_dir"], "model.pkl.gz")
 
     # Symbolic variables
-    x1 = T.matrix("x1")
-    x2 = T.matrix("x2")
-    x3 = T.matrix("x3")
+    x1 = tensor.matrix("x1", dtype=THEANOTYPE)
+    x2 = tensor.matrix("x2", dtype=THEANOTYPE)
+    x3 = tensor.matrix("x3", dtype=THEANOTYPE)
 
     # Random number generators
     rng = np.random.RandomState(options_dict["rnd_seed"])
 
     # Build model
     input_shape = (options_dict["batch_size"], 1, 39, 200)
-    model = siamese.SiameseTripletCNN(
-        rng, x1, x2, x3, input_shape,
-        conv_layer_specs=options_dict["conv_layer_specs"],
-        hidden_layer_specs=options_dict["hidden_layer_specs"],
-        dropout_rates=None,  # dropout is not performed after training
-        )
+    model = siamese.SiameseTripleLSTM(
+        rng, x1, x2, x3, n_hiddens=options_dict["n_hiddens"])
 
     # Load saved parameters
     logger.info("Reading: " + model_fn)

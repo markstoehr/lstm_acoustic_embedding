@@ -16,176 +16,13 @@ import lstm
 # #                              SIAMESE CNN CLASS                              #
 # #-----------------------------------------------------------------------------#
 
-# class SiameseCNN(object):
-#     """
-#     Siamese convolutional neural network.
-
-#     Attributes
-#     ----------
-#     layers : list of ConvMaxPoolLayer and HiddenLayer
-#         The layers that are shared by the two sides of the Siamese network.
-#     dropout_layers : list of ConvMaxPoolLayer and HiddenLayer
-#         The same as the above, but with dropout applied.
-#     x1_layers : list of ConvMaxPoolLayer and HiddenLayer
-#         The one side of the network. Similarly, there is also `x2_layers`, and
-#         `x1_dropout_layers` and `x2_dropout_layers` when dropout is applied.
-#     """
-
-#     def __init__(self, rng, input_x1, input_x2, input_shape,
-#             conv_layer_specs, hidden_layer_specs, srng=None,
-#             dropout_rates=None):
-#         """
-#         Initialize symbolic parameters and expressions.
-
-#         Many of the parameters are identical to that of `cnn.build_cnn_layers`.
-#         Some of the other parameters are described below.
-
-#         Parameters
-#         ----------
-#         input_x1 : symbolic matrix
-#             The matrix is reshaped according to `input_shape` and then treated
-#             as the input of one side of the Siamese network.
-#         input_x2 : symbolic matrix
-#             The matrix is reshaped according to `input_shape` and then treated
-#             as the input of the other side of the Siamese network.
-#         """
-
-#         # Build common layers to which the Siamese layers are tied
-#         input = T.matrix("x")
-#         self.input = input
-#         layers = cnn.build_cnn_layers(
-#             rng, input, input_shape, conv_layer_specs,
-#             hidden_layer_specs, srng, dropout_rates,
-#             )
-
-#         # Copy the shared variables
-#         shared_W = []
-#         shared_b = []
-#         # The isinstance deals with dropout (where `layers` is a tuple)
-#         for layer in (layers[1] if isinstance(layers, tuple) else layers):
-#             shared_W.append(layer.W)
-#             shared_b.append(layer.b)
-
-#         # Build the Siamese layers and tie their weights
-#         x1_layers = cnn.build_cnn_layers(
-#             rng, input_x1, input_shape, conv_layer_specs,
-#             hidden_layer_specs, srng, dropout_rates,
-#             init_W=shared_W, init_b=shared_b
-#             )
-#         x2_layers = cnn.build_cnn_layers(
-#             rng, input_x2, input_shape, conv_layer_specs,
-#             hidden_layer_specs, srng, dropout_rates,
-#             init_W=shared_W, init_b=shared_b
-#             )
-
-#         if dropout_rates is not None:
-#             # All the layers so far is actually tuples which includes the dropout layers
-#             self.dropout_layers, self.layers = layers
-#             self.x1_dropout_layers, self.x1_layers = x1_layers
-#             self.x2_dropout_layers, self.x2_layers = x2_layers
-#         else:
-#             self.layers = layers
-#             self.x1_layers = x1_layers
-#             self.x2_layers = x2_layers
-
-#         # Model parameters
-#         self.parameters = []
-#         self.l1 = 0.
-#         self.l2 = 0.
-#         for layer in self.layers:
-#             self.parameters += layer.parameters
-#             self.l1 += abs(layer.W).sum()
-#             self.l2 += (layer.W**2).sum()
-
-#     def loss_cos_cos2(self, y):
-#         """
-#         Return symbolic loss expression.
-
-#         Parameters
-#         ----------
-#         y : symbolic vector of size n_data
-#             Symbolic vector indicating when a pair is the same (1), meaning we
-#             would want to minimize a distance, or different (0), meaning we
-#             would want to maximize a distance. All member loss functions have
-#             only this parameter.
-#         """
-#         return _loss_cos_cos2(
-#             self.x1_layers[-1].output, self.x2_layers[-1].output, y
-#             )
-
-#     def dropout_loss_cos_cos2(self, y):
-#         return _loss_cos_cos2(
-#             self.x1_dropout_layers[-1].output, self.x2_dropout_layers[-1].output, y
-#             )
-
-#     def loss_cos_cos(self, y):
-#         return _loss_cos_cos(
-#             self.x1_layers[-1].output, self.x2_layers[-1].output, y
-#             )
-
-#     def dropout_loss_cos_cos(self, y):
-#         return _loss_cos_cos(
-#             self.x1_dropout_layers[-1].output, self.x2_dropout_layers[-1].output, y
-#             )
-
-#     def loss_cos2(self, y):
-#         pass
-
-#     def loss_cos_cos_margin(self, y, margin=0.5):
-#         return _loss_cos_cos_margin(
-#             self.x1_layers[-1].output, self.x2_layers[-1].output, y, margin
-#             )
-
-#     def dropout_loss_cos_cos_margin(self, y, margin=0.5):
-#         return _loss_cos_cos_margin(
-#             self.x1_dropout_layers[-1].output, self.x2_dropout_layers[-1].output, y, margin
-#             )
-
-#     def loss_euclidean_margin(self, y, margin=1):
-#         return _loss_euclidean_margin(
-#             self.x1_layers[-1].output, self.x2_layers[-1].output, y, margin
-#             )
-
-#     def dropout_loss_euclidean_margin(self, y, margin=1.):
-#         return _loss_euclidean_margin(
-#             self.x1_dropout_layers[-1].output,
-#             self.x2_dropout_layers[-1].output, y, margin
-#             )
-
-#     def cos_same(self, y):
-#         """
-#         Return symbolic expression for the mean cosine distance of the same
-#         pairs alone.
-#         """
-#         cos_same_distances = T.switch(
-#             y, cos_distance(self.x1_layers[-1].output, self.x2_layers[-1].output), 0.
-#             )
-#         return T.sum(cos_same_distances) / T.sum(y)  # normalize by number of same pairs
-
-#     def cos_diff(self, y):
-#         """
-#         Return symbolic expression for the mean cosine distance of the
-#         different pairs alone.
-#         """
-#         cos_diff_distances = T.switch(
-#             y, 0., cos_distance(self.x1_layers[-1].output, self.x2_layers[-1].output)
-#             )
-#         return T.sum(cos_diff_distances) / T.sum(1 - y)  # normalize by number of different pairs
-
-#     def save(self, f):
-#         """Pickle the model parameters to opened file `f`."""
-#         for layer in self.layers:
-#             layer.save(f)
-
-#     def load(self, f):
-#         """Load the model parameters from the opened pickle file `f`."""
-#         for layer in self.layers:
-#             layer.load(f)
 
 
 #-----------------------------------------------------------------------------#
 #                          SIAMESE TRIPLET LSTM CLASS                          #
 #-----------------------------------------------------------------------------#
+
+THEANOTYPE = "float64"
 
 class SiameseTripletLSTM(object):
     """
@@ -205,9 +42,7 @@ class SiameseTripletLSTM(object):
         `x3_layers`, with corresponding additional layers when using dropout.
     """
 
-    def __init__(self, rng, input_x1, input_x2, input_x3, n_hiddens, input_shape,
-            conv_layer_specs, hidden_layer_specs, srng=None,
-            dropout_rates=None, activation=T.tanh):
+    def __init__(self, rng, input_x1, input_x2, input_x3, n_in, n_hiddens):
         """
         Initialize symbolic parameters and expressions.
 
@@ -230,46 +65,31 @@ class SiameseTripletLSTM(object):
         """
 
         # Build common layers to which the Siamese layers are tied
-        input = T.matrix("x")
+        input = T.matrix("x", dtype=THEANOTYPE)
         self.input = input
+        self.n_in = n_in
         self.n_hiddens = n_hiddens
         self.n_layers = len(self.n_hiddens)
         self.lstms = lstm.MultiLayerLSTM(
-            rng, input, n_hiddens, output_type="last", prefix="lstms")
-
-        # Copy the shared variables
-        shared_W = []
-        shared_b = []
-        # The isinstance deals with dropout (where `layers` is a tuple)
-        for layer in (layers[1] if isinstance(layers, tuple) else layers):
-            shared_W.append(layer.W)
-            shared_b.append(layer.b)
+            rng, input, n_in, n_hiddens, output_type="last", prefix="lstms")
 
         self.x1_lstms = lstm.MultiLayerLSTM(
-            rng, input_x1, n_hiddens, parameters=self.lstms.parameters,
+            rng, input_x1, n_in, n_hiddens, parameters=self.lstms.parameters,
             output_type="last", prefix="lstms_x1")
         self.x2_lstms = lstm.MultiLayerLSTM(
-            rng, input_x2, n_hiddens, parameters=self.lstms.parameters,
+            rng, input_x2, n_in, n_hiddens, parameters=self.lstms.parameters,
             output_type="last", prefix="lstms_x2")
         self.x3_lstms = lstm.MultiLayerLSTM(
-            rng, input_x3, n_hiddens, parameters=self.lstms.parameters,
+            rng, input_x3, n_in, n_hiddens, parameters=self.lstms.parameters,
             output_type="last", prefix="lstms_x3")
 
         self.parameters = self.lstms.parameters
-        # # Model parameters
-        # self.parameters = []
-        # self.l1 = 0.
-        # self.l2 = 0.
-        # for layer in self.layers:
-        #     self.parameters += layer.parameters
-        #     self.l1 += abs(layer.W).sum()
-        #     self.l2 += (layer.W**2).sum()
 
     def loss_hinge_cos(self, margin=0.5):
         return _loss_hinge_cos(
-            self.x1_layers[-1].output,
-            self.x2_layers[-1].output,
-            self.x3_layers[-1].output,
+            self.x1_lstms.output,
+            self.x2_lstms.output,
+            self.x3_lstms.output,
             margin
             )
 
@@ -278,24 +98,22 @@ class SiameseTripletLSTM(object):
         Return symbolic expression for the mean cosine distance of the same
         pairs alone.
         """
-        return T.mean(cos_distance(self.x1_layers[-1].output, self.x2_layers[-1].output))
+        return T.mean(cos_distance(self.x1_lstms.output, self.x2_lstms.output))
 
     def cos_diff(self):
         """
         Return symbolic expression for the mean cosine distance of the
         different pairs alone.
         """
-        return T.mean(cos_distance(self.x1_layers[-1].output, self.x3_layers[-1].output))
+        return T.mean(cos_distance(self.x1_lstms.output, self.x3_lstms.output))
 
     def save(self, f):
         """Pickle the model parameters to opened file `f`."""
-        for layer in self.layers:
-            layer.save(f)
+        self.lstms.save(f)
 
     def load(self, f):
         """Load the model parameters from the opened pickle file `f`."""
-        for layer in self.layers:
-            layer.load(f)
+        self.lstms.load(f)
 
 
 #-----------------------------------------------------------------------------#
@@ -373,8 +191,7 @@ def np_loss_cos_cos2(x1, x2, y):
 #                                MAIN FUNCTION                                #
 #-----------------------------------------------------------------------------#
 
-def main():
-
+def old_main():
     from cnn import np_cnn_layers_output
     from theano.tensor.shared_randomstreams import RandomStreams
     import itertools
@@ -474,6 +291,14 @@ def main():
     print "Numpy loss:", numpy_loss
 
     npt.assert_almost_equal(numpy_loss, theano_loss)
+
+
+def main():
+    x1 = tensor.matrix("x1", dtype=THEANOTYPE)
+    x2 = tensor.matrix("x2", dtype=THEANOTYPE)
+    x3 = tensor.matrix("x3", dtype=THEANOTYPE)
+    model = siamese.SiameseTripletLSTM(
+        rng, x1, x2, x3, n_in=3, n_hiddens=[10, 10])
 
 
 if __name__ == "__main__":
