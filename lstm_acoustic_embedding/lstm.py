@@ -20,7 +20,7 @@ class MultiLayerLSTM(object):
     """
     LSTM with multiple layers.
     """
-    def __init__(self, rng, input, n_in, n_hiddens, parameters=None, output_type="last", prefix="lstms"):
+    def __init__(self, rng, input, n_in, n_hiddens, parameters=None, output_type="last", prefix="lstms", truncate_gradient=20):
         self.n_layers = len(n_hiddens)
         self.layers = []
         self.input = input
@@ -50,7 +50,8 @@ class MultiLayerLSTM(object):
                 
             self.layers.append(
                 LSTM(rng, input, cur_in, n_hidden, W=W, U=U, b=b, output_type=cur_output_type,
-                     prefix="%s_%d" % (self.prefix, layer_id)))
+                     prefix="%s_%d" % (self.prefix, layer_id),
+                     truncate_gradient=truncate_gradient))
             self.parameters.append(self.layers[-1].W)
             self.parameters.append(self.layers[-1].U)
             self.parameters.append(self.layers[-1].b)
@@ -74,10 +75,11 @@ class LSTM(object):
     """
     def __init__(self, rng, input, n_in, n_hidden, W=None, U=None, b=None,
 
-                 output_type="last", prefix="lstm"):
+                 output_type="last", prefix="lstm", truncate_gradient=20):
         """
         initialization for hidden is just done at the zero level
         """
+        self.truncate_gradient = truncate_gradient
         self.output_type = output_type
         self.input = input
         self.n_hidden = n_hidden
@@ -112,7 +114,7 @@ class LSTM(object):
 
     def set_output(self):
         hidden_features = lstm_function(self.input, self.n_hidden, self.W, self.U, self.b,
-                                        prefix=self.prefix)
+                                        prefix=self.prefix, truncate_gradient=self.truncate_gradient)
         if self.output_type == "last":
             self.output = hidden_features[-1]
         else:
@@ -135,7 +137,7 @@ class LSTM(object):
         
             
         
-def lstm_function(state_below, n_hidden, W, U, b, prefix="lstm"):
+def lstm_function(state_below, n_hidden, W, U, b, prefix="lstm", truncate_gradient=20):
     def _slice(_x, n, dim):
         return _x[n*dim:(n+1) * dim]
 
@@ -159,7 +161,8 @@ def lstm_function(state_below, n_hidden, W, U, b, prefix="lstm"):
                                 outputs_info=[init_hidden,
                                               tensor.alloc(numpy_floatX(0.),
                                                            n_hidden)],
-                                name=_p(prefix, '_layers'))
+                                name=_p(prefix, '_layers'),
+                                truncate_gradient=truncate_gradient)
     return rval[0]
 
 
