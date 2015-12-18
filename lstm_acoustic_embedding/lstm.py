@@ -20,7 +20,7 @@ class MultiLayerLSTM(object):
     """
     LSTM with multiple layers.
     """
-    def __init__(self, rng, input, n_in, n_hiddens, parameters=None, output_type="last", prefix="lstms", truncate_gradient=20):
+    def __init__(self, rng, input, n_in, n_hiddens, parameters=None, output_type="last", prefix="lstms", truncate_gradient=-1):
         self.n_layers = len(n_hiddens)
         self.layers = []
         self.input = input
@@ -75,7 +75,7 @@ class LSTM(object):
     """
     def __init__(self, rng, input, n_in, n_hidden, W=None, U=None, b=None,
 
-                 output_type="last", prefix="lstm", truncate_gradient=20):
+                 output_type="last", prefix="lstm", truncate_gradient=-1):
         """
         initialization for hidden is just done at the zero level
         """
@@ -137,7 +137,7 @@ class LSTM(object):
         
             
         
-def lstm_function(state_below, n_hidden, W, U, b, prefix="lstm", truncate_gradient=20):
+def lstm_function(state_below, n_hidden, W, U, b, prefix="lstm", truncate_gradient=-1):
     def _slice(_x, n, dim):
         return _x[n*dim:(n+1) * dim]
 

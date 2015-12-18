@@ -32,8 +32,14 @@ def main(args):
         subprocess.call(command, shell=True)
         sample_rate, samples = wavfile.read("tmp.wav")
         samples = samples.astype(float)
+        full_mfccs = mfcc_convert.sig2s2mfc(samples)
+        cutoff = numpy.sort(full_mfccs[:, 0])
+        speech_areas = full_mfccs[full_mfccs[:, 0] > cutoff]
+        cepstral_mean = speech_areas.mean(axis=0)
+        cepstral_variance = speech_areas.std(axis=0)
         word_samples = samples[start - 480: end + 480]
-        word_mfccs = mfcc_convert.sig2s2mfc(word_samples)
+        word_mfccs = ((mfcc_convert.sig2s2mfc(word_samples) - cepstral_mean)
+                      / cepstral_variance)
         n_frames, n_dims = word_mfccs.shape
         full_mfccs = numpy.empty((n_frames, n_dims * 3), dtype=numpy.float32)
         full_mfccs[:,:n_dims] = word_mfccs
