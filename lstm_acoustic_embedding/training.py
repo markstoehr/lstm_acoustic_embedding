@@ -328,13 +328,15 @@ def train_fixed_epochs_with_validation(n_epochs, train_model,
     for i_epoch in xrange(n_epochs):
 
         # Loop over training tripletes
-        # train_losses = []
+        train_losses = []
         start_time = timeit.default_timer()
-        train_losses = [train_model(*triplet) for triplet in train_triplet_iterator]
+        # train_losses = [train_model(*triplet) for triplet in train_triplet_iterator]
         # for i_triplet in xrange(n_train_tripletes):
-        # for triplet in train_triplet_iterator()
+        for triplet_id, triplet in enumerate(train_triplet_iterator):
             # Calculate training loss for this triplet and update parameters
-            # train_losses.append(train_model(*triplet))
+            if triplet_id % 50 == 0:
+                logger.info(str(datetime.now()) + " triplet_id: %d" % triplet_id)
+            train_losses.append(train_model(*triplet))
 
         # Validate the model
         validation_losses = [validate_model(*triplet) for triplet in validate_triplet_iterator]
