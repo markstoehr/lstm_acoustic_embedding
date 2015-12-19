@@ -16,7 +16,7 @@ import theano
 import theano.tensor as T
 
 import samediff
-THEANOTYPE = "float64"
+THEANOTYPE = theano.config.floatX
 logger = logging.getLogger(__name__)
 
 
@@ -202,7 +202,7 @@ def load_swbd_same_diff_mask(rng, data_dir):
         
         ls = np.asarray([len(npz[i]) for i in utt_ids], dtype=np.int32)
         max_length = ls.max()
-        xs = np.zeros((len(ls), max_length, xs_list[0].shape[1]),
+        xs = np.zeros((len(ls), max_length, npz[utt_ids[0]].shape[1]),
                       dtype=THEANOTYPE)
         mask = np.zeros((len(ls), max_length), dtype=THEANOTYPE)
         for j, i in enumerate(utt_ids):

@@ -18,7 +18,7 @@ import theano.tensor as T
 from data_io import smart_open
 
 logger = logging.getLogger(__name__)
-THEANOTYPE = "float64"
+THEANOTYPE = theano.config.floatX
 
 #-----------------------------------------------------------------------------#
 #                           LEARNING RULE FUNCTIONS                           #

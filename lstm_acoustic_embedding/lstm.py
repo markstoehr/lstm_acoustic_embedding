@@ -13,7 +13,7 @@ import os
 import data_io
 
 SEED = 123
-THEANOTYPE = "float64"
+THEANOTYPE = theano.config.floatX
 numpy.random.seed(SEED)
 
 def batchify(xs):
