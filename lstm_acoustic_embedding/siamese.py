@@ -84,6 +84,7 @@ class SiameseTripletLSTM(object):
             output_type="last", prefix="lstms_x3")
 
         self.parameters = self.lstms.parameters
+        self.output = self.lstms.output
 
     def loss_hinge_cos(self, margin=0.5):
         return _loss_hinge_cos(
