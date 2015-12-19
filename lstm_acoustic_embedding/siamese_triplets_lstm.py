@@ -31,7 +31,7 @@ import data_io
 import samediff
 
 logger = logging.getLogger(__name__)
-THEANOTYPE = "float64"
+THEANOTYPE = theano.config.floatX
 
 #-----------------------------------------------------------------------------#
 #                           DEFAULT TRAINING OPTIONS                          #
