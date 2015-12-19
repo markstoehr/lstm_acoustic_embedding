@@ -27,7 +27,6 @@ import siamese_triplets_lstm
 
 logger = logging.getLogger(__name__)
 
-
 #-----------------------------------------------------------------------------#
 #                              UTILITY FUNCTIONS                              #
 #-----------------------------------------------------------------------------#
@@ -96,8 +95,9 @@ def apply_layers(model_dir, set, batch_size=None, i_layer=-1):
     begins = theano.shared(base_begins, borrow=True)
     
     logger.info("Formatting into Theano shared variable")
+
     shared_x = theano.shared(numpy.asarray(
-        numpy.vstack(xs), dtype=theano.config.floatX), borrow=True)
+        numpy.vstack(xs), dtype=siamese_triplets_lstm.THEANOTYPE), borrow=True)
 
     # Compile function for passing segments through CNN layers
     x = model.input  # input to the tied layers
@@ -125,13 +125,13 @@ def apply_layers(model_dir, set, batch_size=None, i_layer=-1):
 
     embeddings_dict = {}
 
-    for embedding_i, embedding in enumerate(embedding):
+    for embedding_i, embedding in enumerate(embeddings):
         utt_id = utt_ids[embedding_i]
         embeddings_dict[utt_id] = embedding
 
     logger.info(datetime.now())
 
-    return layers_output_dict
+    return embeddings_dict
 
 
 #-----------------------------------------------------------------------------#
