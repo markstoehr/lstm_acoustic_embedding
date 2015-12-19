@@ -16,6 +16,186 @@ SEED = 123
 THEANOTYPE = "float64"
 numpy.random.seed(SEED)
 
+def batchify(xs):
+    max_length = max(len(x) for x in xs)
+    n_sequences = len(xs)
+    n_dim = xs[0].shape[1]
+    xs_array = numpy.empty((max_length, n_sequences, n_dim), dtype=THEANOTYPE)
+    mask = numpy.zeros((max_length, n_sequences), dtype=THEANOTYPE)
+    for x_index, x in enumerate(xs):
+        x_length = len(x)
+        xs_array[:x_length, x_index] = x
+        mask[:x_length, x_index] = 1.0
+    return xs_array, mask
+
+class BatchMultiLayerLSTM(object):
+    """
+    LSTM with multiple layers.
+    """
+    def __init__(self, rng, input, mask, n_in, n_hiddens, parameters=None, output_type="last", prefix="lstms", truncate_gradient=-1):
+        self.truncate_gradient = truncate_gradient
+        self.n_layers = len(n_hiddens)
+        self.layers = []
+        self.input = input
+        self.mask = mask
+        self.n_in = n_in
+        self.prefix = prefix
+        # reverse and copy because we want to pop off the parameters
+        if parameters is not None:
+            cur_parameters = list(parameters)[::-1]
+        else:
+            cur_parameters = None
+            
+        self.parameters = []
+        cur_in = n_in
+        self.l2 = 0.
+        for layer_id, n_hidden in enumerate(n_hiddens):
+            cur_output_type = output_type if layer_id == self.n_layers-1 else "full"
+            if cur_parameters is None:
+                W = None
+                U = None
+                b = None
+            else:
+                W = cur_parameters.pop()
+                U = cur_parameters.pop()
+                b = cur_parameters.pop()
+
+            if self.layers:
+                input = self.layers[-1].output
+                
+            self.layers.append(
+                BatchLSTM(rng, input, mask, cur_in, n_hidden, W=W, U=U, b=b,
+                          output_type=cur_output_type,
+                          prefix="%s_%d" % (self.prefix, layer_id),
+                     truncate_gradient=self.truncate_gradient))
+            self.parameters.append(self.layers[-1].W)
+            self.parameters.append(self.layers[-1].U)
+            self.parameters.append(self.layers[-1].b)
+            self.l2 += self.layers[-1].l2
+            cur_in = n_hidden
+        self.output = self.layers[-1].output
+
+    def save(self, f):
+        """Pickle the model parameters to opened file `f`."""
+        for layer in self.layers:
+            layer.save(f)
+
+    def load(self, f):
+        """Load the model parameters from the opened pickle file `f`."""
+        for layer in self.layers:
+            layer.load(f)
+
+
+class BatchLSTM(object):
+    """
+    LSTM with batch processing. Assumption is
+
+    input: (n_time_steps, n_sequences, n_dim)
+    """
+    def __init__(self, rng, input, mask, n_in, n_hidden, W=None, U=None, b=None,
+                 output_type="last", prefix="lstm", truncate_gradient=-1):
+        self.truncate_gradient = truncate_gradient
+        self.output_type = output_type
+        self.input = input
+        self.mask = mask
+        self.n_hidden = n_hidden
+        self.n_in = n_in
+        self.prefix = prefix
+        if W is None or U is None or b is None:
+            WU_values = numpy.concatenate(
+                [ortho_weight(self.n_hidden + self.n_in)[:,
+                                                               :self.n_hidden],
+                 ortho_weight(self.n_hidden + self.n_in)[:,
+                                                               :self.n_hidden],
+                 ortho_weight(self.n_hidden + self.n_in)[:,
+                                                               :self.n_hidden],
+                 ortho_weight(self.n_hidden + self.n_in)[:,
+                                                               :self.n_hidden],
+                 ], axis=1)
+            W_values = WU_values[:self.n_in]
+            U_values = WU_values[self.n_in:]
+            W = theano.shared(value=W_values, name="%s_W" % prefix,
+                              borrow=True)
+            U = theano.shared(value=U_values, name="%s_U" % prefix,
+                              borrow=True)
+            b_values = numpy.zeros(4 * self.n_hidden, dtype=THEANOTYPE)
+            b = theano.shared(value=b_values, name="%s_b" % prefix,
+                              borrow=True)
+        self.W = W
+        self.U = U
+        self.b = b
+        self.parameters = [self.W, self.U, self.b]
+        self.l2 = (self.W**2).sum() + (self.U**2).sum()
+            
+        self.input = input
+        self.set_output()
+
+    def set_output(self):
+        hidden_features = batch_lstm_function(self.input, self.mask, self.n_hidden, self.W, self.U, self.b,
+                                        prefix=self.prefix, truncate_gradient=self.truncate_gradient)
+        if self.output_type == "last":
+            self.output = hidden_features[-1]
+        else:
+            self.output = hidden_features
+
+    def save(self, f):
+        """Pickle the model parameters to opened file `f`."""
+        pickle.dump(self.W.get_value(borrow=True), f, -1)
+        pickle.dump(self.U.get_value(borrow=True), f, -1)
+        pickle.dump(self.b.get_value(borrow=True), f, -1)
+
+    def load(self, f):
+        """Load the model parameters from the opened pickle file `f`."""
+        self.W.set_value(pickle.load(f), borrow=True)
+        self.U.set_value(pickle.load(f), borrow=True)
+        self.b.set_value(pickle.load(f), borrow=True)
+        # self.n_in, self.n_hidden = self.W.get_value(borrow=True).shape
+        # self.parameters = [self.W, self.U, self.b]
+        # self.set_output()
+
+def batch_lstm_function(state_below, mask, n_hidden, W, U, b, prefix="lstm", truncate_gradient=-1):
+    """
+    state_below: (n_timesteps, n_sequences, n_dim)
+    """
+    n_steps = state_below.shape[0]
+    n_sequences = state_below.shape[1]
+    
+    
+    def _slice(_x, n, dim):
+        return _x[:, n*dim:(n+1) * dim]
+
+    def _step(x_, m_, h_, c_):
+        preact = tensor.dot(h_, U)
+        preact += x_
+
+        i = nnet.sigmoid(_slice(preact, 0, n_hidden))
+        f = nnet.sigmoid(_slice(preact, 1, n_hidden))
+        o = nnet.sigmoid(_slice(preact, 2, n_hidden))
+        c = tensor.tanh(_slice(preact, 3, n_hidden))
+
+        c = f * c_ + i * c
+        c = m_[:, None] * c + (1. - m_)[:, None] * c_
+        
+        h = o * tensor.tanh(c)
+        h = m_[:, None] * h + (1. - m_)[:, None] * h_
+        return h, c
+
+    init_hidden = tensor.alloc(numpy_floatX(0.),
+                               n_sequences, n_hidden)
+    state_below = tensor.dot(state_below, W) + b
+    rval, updates = theano.scan(_step,
+                                sequences=[state_below, mask],
+                                outputs_info=[init_hidden,
+                                              tensor.alloc(numpy_floatX(0.),
+                                                           n_sequences,
+                                                           n_hidden)],
+                                name=_p(prefix, '_layers'),
+                                truncate_gradient=truncate_gradient)
+    return rval[0]
+
+
+
+
 class MultiLayerLSTM(object):
     """
     LSTM with multiple layers.
@@ -34,6 +214,7 @@ class MultiLayerLSTM(object):
             
         self.parameters = []
         cur_in = n_in
+        self.l2 = 0.
         for layer_id, n_hidden in enumerate(n_hiddens):
             cur_output_type = output_type if layer_id == self.n_layers-1 else "full"
             if cur_parameters is None:
@@ -55,6 +236,7 @@ class MultiLayerLSTM(object):
             self.parameters.append(self.layers[-1].W)
             self.parameters.append(self.layers[-1].U)
             self.parameters.append(self.layers[-1].b)
+            self.l2 += self.layers[-1].l2
             cur_in = n_hidden
         self.output = self.layers[-1].output
 
@@ -105,10 +287,12 @@ class LSTM(object):
             b_values = numpy.zeros(4 * self.n_hidden, dtype=THEANOTYPE)
             b = theano.shared(value=b_values, name="%s_b" % prefix,
                               borrow=True)
-        self.parameters = [W, U, b]
         self.W = W
         self.U = U
         self.b = b
+        self.parameters = [self.W, self.U, self.b]
+        self.l2 = (self.W**2).sum() + (self.U**2).sum()
+            
         self.input = input
         self.set_output()
 
@@ -148,7 +332,7 @@ def lstm_function(state_below, n_hidden, W, U, b, prefix="lstm", truncate_gradie
         i = nnet.sigmoid(_slice(preact, 0, n_hidden))
         f = nnet.sigmoid(_slice(preact, 1, n_hidden))
         o = nnet.sigmoid(_slice(preact, 2, n_hidden))
-        c = nnet.sigmoid(_slice(preact, 3, n_hidden))
+        c = tensor.tanh(_slice(preact, 3, n_hidden))
 
         c = f * c_ + i * c
         h = o * tensor.tanh(c)
@@ -424,7 +608,7 @@ def lstm_numpy(x, W, U, b):
         i = utils.sigmoid(_slice(preact, 0, n_hidden))
         f = utils.sigmoid(_slice(preact, 1, n_hidden))
         o = utils.sigmoid(_slice(preact, 2, n_hidden))
-        c = utils.sigmoid(_slice(preact, 3, n_hidden))
+        c = utils.tanh(_slice(preact, 3, n_hidden))
 
         c = f * prev_c + i * c
         h[n] = o * utils.tanh(c)
@@ -474,7 +658,30 @@ def test_multilstm():
     cost = tensor.sum(multi_lstm.output**2)
     loss = theano.function(inputs=[x], outputs=cost)
     gradient = tensor.grad(cost, multi_lstm.parameters)
+
+def test_multibatchlstm():
+    rng = numpy.random.RandomState(0)
+    x = tensor.matrix("x", dtype=THEANOTYPE)
+    n_in = 3
+    n_hiddens = [10, 10]
+    multi_lstm = MultiLayerLSTM(rng, x, n_in, n_hiddens, output_type="last")
+    f = theano.function(inputs=[x], outputs=multi_lstm.output)
+
+    xs = tensor.tensor3("xs", dtype=THEANOTYPE)
+    mask = tensor.matrix("mask", dtype=THEANOTYPE)
+
+    multi_batchlstm = BatchMultiLayerLSTM(rng, xs, mask, n_in, n_hiddens, parameters=multi_lstm.parameters, output_type="last")
+    fs = theano.function(inputs=[xs, mask], outputs=multi_batchlstm.output)
     
+    
+    sequence_lengths = [5, 10, 15, 20]
+    xs0 = [rng.randn(n_data, n_in).astype(THEANOTYPE)
+           for n_data in sequence_lengths]
+    hs0 = numpy.asarray([f(x0) for x0 in xs0])
+    xs_arr0, mask = batchify(xs0)
+    hs1 = fs(xs_arr0, mask)
+    numpy.testing.assert_array_almost_equal(hs0, hs1)
+
 def test_multisaveload():
     rng = numpy.random.RandomState(0)
     x = tensor.matrix("x", dtype=THEANOTYPE)
@@ -527,6 +734,7 @@ def main():
     test_lstm()
     test_multilstm()
     test_saveload()
+    test_multibatchlstm()
     
 if __name__ == "__main__":
     main()
