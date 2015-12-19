@@ -358,8 +358,8 @@ def load_siamese_triplets_lstm(options_dict):
 
     # Build model
     input_shape = (options_dict["batch_size"], 1, 39, 200)
-    model = siamese.SiameseTripleLSTM(
-        rng, x1, x2, x3, n_hiddens=options_dict["n_hiddens"])
+    model = siamese.SiameseTripletLSTM(
+        rng, x1, x2, x3, n_in=39, n_hiddens=options_dict["n_hiddens"])
 
     # Load saved parameters
     logger.info("Reading: " + model_fn)
