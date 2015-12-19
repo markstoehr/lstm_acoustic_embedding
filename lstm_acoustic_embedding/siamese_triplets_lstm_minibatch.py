@@ -42,7 +42,7 @@ default_options_dict = {
     "data_dir": "../data/nonpadded_icassp15.0",
     # "data_dir": "data/tmp",
     "n_same_pairs": int(100e3), # if None, all same pairs are used
-    "n_hiddens": [80, 80],
+    "n_hiddens": [256, 256],
     "rnd_seed": 42,
     "batch_size": 1024,
     "n_max_epochs": 20,
