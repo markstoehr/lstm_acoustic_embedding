@@ -32,23 +32,23 @@ logger = logging.getLogger(__name__)
 #                              UTILITY FUNCTIONS                              #
 #-----------------------------------------------------------------------------#
 
-# def check_argv():
-#     """Check the command line arguments."""
-#     parser = argparse.ArgumentParser(description=__doc__.strip().split("\n")[0], add_help=False)
-#     parser.add_argument("model_dir", type=str, help="model directory")
-#     parser.add_argument(
-#         "set", type=str, help="set to perform evaluation on", choices=["train", "dev", "test"]
-#         )
-#     parser.add_argument(
-#         "--batch_size", type=int, help="if not provided, a single batch is used"
-#         )
-#     parser.add_argument(
-#         "--i_layer", type=int, help="the layer of the network to use (default: %(default)s)", default=-1
-#         )
-#     if len(sys.argv) == 1:
-#         parser.print_help()
-#         sys.exit(1)
-#     return parser.parse_args()
+def check_argv():
+    """Check the command line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__.strip().split("\n")[0], add_help=False)
+    parser.add_argument("model_dir", type=str, help="model directory")
+    parser.add_argument(
+        "set", type=str, help="set to perform evaluation on", choices=["train", "dev", "test"]
+        )
+    parser.add_argument(
+        "--batch_size", type=int, help="if not provided, a single batch is used"
+        )
+    parser.add_argument(
+        "--i_layer", type=int, help="the layer of the network to use (default: %(default)s)", default=-1
+        )
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(1)
+    return parser.parse_args()
 
 
 # def load_model(options_dict):
