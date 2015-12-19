@@ -22,7 +22,7 @@ import lstm
 #                          SIAMESE TRIPLET LSTM CLASS                          #
 #-----------------------------------------------------------------------------#
 
-THEANOTYPE = "float64"
+THEANOTYPE = theano.config.floatX
 
 class SiameseTripletBatchLSTM(object):
     """

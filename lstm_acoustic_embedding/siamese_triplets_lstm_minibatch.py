@@ -32,7 +32,7 @@ import samediff
 
 
 logger = logging.getLogger(__name__)
-THEANOTYPE = "float64"
+THEANOTYPE = theano.config.floatX
 
 #-----------------------------------------------------------------------------#
 #                           DEFAULT TRAINING OPTIONS                          #
@@ -193,20 +193,20 @@ def train_siamese_triplets_lstm(options_dict):
     # Load and format data
 
     # Load into shared variables
-    datasets = data_io.load_swbd_same_diff_nopadding(rng, options_dict["data_dir"])
+    datasets = data_io.load_swbd_same_diff_mask(rng, options_dict["data_dir"])
     train_x, train_mask, train_lengths, train_matches_vec, train_labels = datasets[0]
     dev_x, dev_mask, dev_lengths, dev_matches_vec, dev_labels = datasets[1]
     test_x, test_mask, test_lengths, test_matches_vec, test_labels = datasets[2]
 
     # Make batch iterators
-    train_triplet_iterator = TripletIterator(
-        rng, train_matches_vec, n_same_pairs=options_dict["n_same_pairs"],
+    train_triplet_iterator = BatchIteratorTriplets(
+        rng, train_matches_vec, options_dict["batch_size"], n_same_pairs=options_dict["n_same_pairs"],
         sample_diff_every_epoch=True)
-    validate_triplet_iterator = TripletIterator(
-        rng, dev_matches_vec, n_same_pairs=options_dict["n_same_pairs"],
+    validate_triplet_iterator = BatchIteratorTriplets(
+        rng, dev_matches_vec, options_dict["batch_size"], n_same_pairs=options_dict["n_same_pairs"],
         sample_diff_every_epoch=False)
-    test_triplet_iterator = TripletIterator(
-        rng, test_matches_vec, n_same_pairs=options_dict["n_same_pairs"],
+    test_triplet_iterator = BatchIteratorTriplets(
+        rng, test_matches_vec, options_dict["batch_size"], n_same_pairs=options_dict["n_same_pairs"],
         sample_diff_every_epoch=False)
 
 
@@ -251,19 +251,17 @@ def train_siamese_triplets_lstm(options_dict):
     diff_distance = model.cos_diff()
     outputs = [error, loss, same_distance, diff_distance]
     theano_mode = theano.Mode(linker="cvm")
+
     validate_model = theano.function(
         inputs=[x1_indices, x2_indices, x3_indices],
         outputs=outputs,
         givens={
-            l1: dev_lengths[x1_indices].max()
-            x1: dev_x[x1_indices].swapaxes(0, 1)[:l1],
-            m1: dev_mask[x1_indices][:l1],
-            l2: dev_lengths[x1_indices].max()
-            x2: dev_x[x2_indices].swapaxes(0, 1)[:l2],
-            m2: dev_mask[x2_indices][:l2],
-            l3: dev_lengths[x3_indices].max()
-            x3: dev_x[x3_indices].swapaxes(0, 1)[:l3],
-            m3: dev_mask[x3_indices][:l3],
+            x1: dev_x[x1_indices].swapaxes(0, 1)[:dev_lengths[x1_indices].max()],
+            m1: dev_mask[x1_indices][:dev_lengths[x1_indices].max()],
+            x2: dev_x[x2_indices].swapaxes(0, 1)[:dev_lengths[x2_indices].max()],
+            m2: dev_mask[x2_indices][:dev_lengths[x2_indices].max()],
+            x3: dev_x[x3_indices].swapaxes(0, 1)[:dev_lengths[x3_indices].max()],
+            m3: dev_mask[x3_indices][:dev_lengths[x3_indices].max()],
             },
         mode=theano_mode,
         )
@@ -271,18 +269,31 @@ def train_siamese_triplets_lstm(options_dict):
         inputs=[x1_indices, x2_indices, x3_indices],
         outputs=outputs,
         givens={
-            l1: test_lengths[x1_indices].max()
-            x1: test_x[x1_indices].swapaxes(0, 1)[:l1],
-            m1: test_mask[x1_indices][:l1],
-            l2: test_lengths[x1_indices].max()
-            x2: test_x[x2_indices].swapaxes(0, 1)[:l2],
-            m2: test_mask[x2_indices][:l2],
-            l3: test_lengths[x3_indices].max()
-            x3: test_x[x3_indices].swapaxes(0, 1)[:l3],
-            m3: test_mask[x3_indices][:l3],
+            x1: test_x[x1_indices].swapaxes(0, 1)[:test_lengths[x1_indices].max()],
+            m1: test_mask[x1_indices][:test_lengths[x1_indices].max()],
+            x2: test_x[x2_indices].swapaxes(0, 1)[:test_lengths[x2_indices].max()],
+            m2: test_mask[x2_indices][:test_lengths[x2_indices].max()],
+            x3: test_x[x3_indices].swapaxes(0, 1)[:test_lengths[x3_indices].max()],
+            m3: test_mask[x3_indices][:test_lengths[x3_indices].max()],
             },
         mode=theano_mode,
         )
+    # test_model = theano.function(
+    #     inputs=[x1_indices, x2_indices, x3_indices],
+    #     outputs=outputs,
+    #     givens={
+    #         l1: test_lengths[x1_indices].max(),
+    #         x1: test_x[x1_indices].swapaxes(0, 1)[:l1],
+    #         m1: test_mask[x1_indices][:l1],
+    #         l2: test_lengths[x2_indices].max(),
+    #         x2: test_x[x2_indices].swapaxes(0, 1)[:l2],
+    #         m2: test_mask[x2_indices][:l2],
+    #         l3: test_lengths[x3_indices].max(),
+    #         x3: test_x[x3_indices].swapaxes(0, 1)[:l3],
+    #         m3: test_mask[x3_indices][:l3],
+    #         },
+    #     mode=theano_mode,
+    #     )
 
     # Gradients and training updates
     parameters = model.parameters
@@ -303,20 +314,33 @@ def train_siamese_triplets_lstm(options_dict):
     train_model = theano.function(
         inputs=[x1_indices, x2_indices, x3_indices],
         outputs=outputs,
-        updates=updates,
         givens={
-            l1: train_lengths[x1_indices].max()
-            x1: train_x[x1_indices].swapaxes(0, 1)[:l1],
-            m1: train_mask[x1_indices][:l1],
-            l2: train_lengths[x1_indices].max()
-            x2: train_x[x2_indices].swapaxes(0, 1)[:l2],
-            m2: train_mask[x2_indices][:l2],
-            l3: train_lengths[x3_indices].max()
-            x3: train_x[x3_indices].swapaxes(0, 1)[:l3],
-            m3: train_mask[x3_indices][:l3],
+            x1: train_x[x1_indices].swapaxes(0, 1)[:train_lengths[x1_indices].max()],
+            m1: train_mask[x1_indices][:train_lengths[x1_indices].max()],
+            x2: train_x[x2_indices].swapaxes(0, 1)[:train_lengths[x2_indices].max()],
+            m2: train_mask[x2_indices][:train_lengths[x2_indices].max()],
+            x3: train_x[x3_indices].swapaxes(0, 1)[:train_lengths[x3_indices].max()],
+            m3: train_mask[x3_indices][:train_lengths[x3_indices].max()],
             },
         mode=theano_mode,
         )
+    # train_model = theano.function(
+    #     inputs=[x1_indices, x2_indices, x3_indices],
+    #     outputs=outputs,
+    #     updates=updates,
+    #     givens={
+    #         l1: train_lengths[x1_indices].max(),
+    #         x1: train_x[x1_indices].swapaxes(0, 1)[:l1],
+    #         m1: train_mask[x1_indices][:l1],
+    #         l2: train_lengths[x2_indices].max(),
+    #         x2: train_x[x2_indices].swapaxes(0, 1)[:l2],
+    #         m2: train_mask[x2_indices][:l2],
+    #         l3: train_lengths[x3_indices].max(),
+    #         x3: train_x[x3_indices].swapaxes(0, 1)[:l3],
+    #         m3: train_mask[x3_indices][:l3],
+    #         },
+    #     mode=theano_mode,
+    #     )
 
 
     # Train model
