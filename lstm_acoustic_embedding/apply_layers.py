@@ -13,12 +13,13 @@ from os import path
 import argparse
 import cPickle as pickle
 import logging
-import numpy as np
+import numpy
 import sys
 import theano
 import theano.tensor as T
 
-from data_io import smart_open
+import data_io
+import siamese_triplets_lstm
 # import train_cnn
 # import train_mlp
 # import train_siamese_cnn
@@ -69,7 +70,7 @@ def apply_layers(model_dir, set, batch_size=None, i_layer=-1):
     # Load the model options
     options_dict_fn = path.join(model_dir, "options_dict.pkl.gz")
     logger.info("Reading: " + options_dict_fn)
-    f = smart_open(options_dict_fn)
+    f = data_io.smart_open(options_dict_fn)
     options_dict = pickle.load(f)
     # print options_dict
     f.close()
@@ -77,58 +78,56 @@ def apply_layers(model_dir, set, batch_size=None, i_layer=-1):
     # Load the dataset
     npz_fn = path.join(options_dict["data_dir"], "swbd." + set + ".npz")
     logger.info("Reading: " + npz_fn)
-    npz = np.load(npz_fn)
+    npz = numpy.load(npz_fn)
     logger.info("Loaded " + str(len(npz.keys())) + " segments")
 
-    # Load the model
-    if batch_size is not None:
-        options_dict["batch_size"] = batch_size
-    else:
-        options_dict["batch_size"] = len(npz.keys())
-    model = load_model(options_dict)
+    if "siamese_triplets" in options_dict["model_dir"]:
+        model = siamese_triplets_lstm.load_siamese_triplets_lstm(options_dict)
 
     # Load data into Theano shared variable
     utt_ids = sorted(npz.keys())
-    mats = np.array([npz[i] for i in utt_ids])
-    logger.info("Data shape: " + str(mats.shape))
+    xs = [npz[i] for i in utt_ids]
+    ls = numpy.asarray([len(x) for x in xs], dtype=int)
+    base_inds = numpy.cumsum(ls)
+    ends = theano.shared(base_inds, borrow=True)
+    base_begins = base_inds.copy()
+    base_begins[1:] = base_inds[:-1]
+    base_begins[0] = 0
+    begins = theano.shared(base_begins, borrow=True)
+    
     logger.info("Formatting into Theano shared variable")
-    shared_x = theano.shared(np.asarray(mats, dtype=theano.config.floatX), borrow=True)
-
-    # Flatten data
-    d_in = 39*200
-    shared_x = shared_x.reshape((-1, d_in))
+    shared_x = theano.shared(numpy.asarray(
+        numpy.vstack(xs), dtype=theano.config.floatX), borrow=True)
 
     # Compile function for passing segments through CNN layers
     x = model.input  # input to the tied layers
-    i_batch = T.lscalar()
-    layers_output = model.layers[i_layer].output
+    x_i = T.lscalar()
     apply_model = theano.function(
-        inputs=[i_batch],
-        outputs=layers_output,
+        inputs=[x_i],
+        outputs=model.output,
         givens={
             x: shared_x[
-                i_batch * options_dict["batch_size"] : 
-                (i_batch + 1) * options_dict["batch_size"]
+                begins[x_i]:ends[x_i]
                 ]
             }
         )
 
     logger.info(datetime.now())
 
-    n_batches = mats.shape[0]/options_dict["batch_size"]
-    logger.info("Passing data through in batches: " + str(n_batches))
-    layers_outputs = []
-    for i_batch in xrange(n_batches):
-        batch_layers_outputs = apply_model(i_batch)
-        layers_outputs.append(batch_layers_outputs)
-    layers_outputs = np.vstack(layers_outputs)
-    logger.info("Outputs shape: " + str(layers_outputs.shape))
+    n_x = len(ls)
+    logger.info("Passing data through in model: " + str(n_x))
+    embeddings = []
+    for x_i in range(n_x):
+        x_embedding = apply_model(x_i)
+        embeddings.append(x_embedding)
+    embeddings = numpy.vstack(embeddings)
+    logger.info("Outputs shape: " + str(embeddings.shape))
 
-    layers_output_dict = {}
-    # for i , utt_id in enumerate(utt_ids):
-    for i in xrange(layers_outputs.shape[0]):
-        utt_id = utt_ids[i]
-        layers_output_dict[utt_id] = layers_outputs[i]
+    embeddings_dict = {}
+
+    for embedding_i, embedding in enumerate(embedding):
+        utt_id = utt_ids[embedding_i]
+        embeddings_dict[utt_id] = embedding
 
     logger.info(datetime.now())
 
@@ -139,19 +138,19 @@ def apply_layers(model_dir, set, batch_size=None, i_layer=-1):
 #                                MAIN FUNCTION                                #
 #-----------------------------------------------------------------------------#
 
-# def main():
-#     args = check_argv()
+def main():
+    args = check_argv()
 
-#     logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.DEBUG)
 
-#     layers_output_dict = apply_layers(args.model_dir, args.set, args.batch_size, args.i_layer)
+    layers_output_dict = apply_layers(args.model_dir, args.set, args.batch_size, args.i_layer)
 
-#     layers_output_npz_fn = path.join(
-#         args.model_dir, "swbd." + args.set + ".layer_" + str(args.i_layer) + ".npz"
-#         )
-#     logger.info("Writing: " + layers_output_npz_fn)
-#     np.savez_compressed(layers_output_npz_fn, **layers_output_dict)
+    layers_output_npz_fn = path.join(
+        args.model_dir, "swbd." + args.set + ".layer_" + str(args.i_layer) + ".npz"
+        )
+    logger.info("Writing: " + layers_output_npz_fn)
+    numpy.savez_compressed(layers_output_npz_fn, **layers_output_dict)
 
 
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()
