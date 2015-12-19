@@ -181,6 +181,48 @@ def load_swbd_same_diff(rng, data_dir):
 
     return datasets
 
+def load_swbd_same_diff_mask(rng, data_dir):
+
+    logger.info("Loading same and different pairs: " + data_dir)
+
+    datasets = []
+
+    for set in ["train", "dev", "test"]:
+
+        npz_fn = path.join(data_dir, "swbd." + set + ".npz")
+        logger.info("Reading: " + npz_fn)
+
+        # Load data and shuffle
+        npz = np.load(npz_fn)
+        utt_ids = sorted(npz.keys())
+        rng.shuffle(utt_ids)
+        max_length = 0
+        for i in utt_ids:
+            max_length = max(max_length, len(npz[i]))
+        
+        ls = np.asarray([len(npz[i]) for i in utt_ids], dtype=np.int32)
+        max_length = ls.max()
+        xs = np.zeros((len(ls), max_length, xs_list[0].shape[1]),
+                      dtype=THEANOTYPE)
+        mask = np.zeros((len(ls), max_length), dtype=THEANOTYPE)
+        for j, i in enumerate(utt_ids):
+            xs[j][:ls[j]] = npz[i]
+            mask[j][:ls[j]] = 1.0
+            
+
+        # Get labels for each utterance
+        labels = swbd_utts_to_labels(utt_ids)
+
+        matches_vec = samediff.generate_matches_array(labels)
+        shared_x = theano.shared(xs, borrow=True)
+        shared_mask = theano.shared(mask, borrow=True)
+        shared_ls = theano.shared(ls, borrow=True)
+        
+        # Create a tuple for this set and add to `data_sets`
+        datasets.append((shared_x, shared_mask, shared_ls, matches_vec, labels))
+
+    return datasets
+
 def load_swbd_same_diff_nopadding(rng, data_dir):
 
     logger.info("Loading same and different pairs: " + data_dir)
