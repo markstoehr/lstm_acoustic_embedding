@@ -4,11 +4,11 @@ Contact: kamperh@gmail.com
 Date: 2015
 """
 
-import numpy as np
+import numpy
 import scipy.spatial.distance as distance
 import theano
 import theano.tensor as T
-
+from theano import tensor
 import lstm
 
 
@@ -281,7 +281,7 @@ def np_loss_cos_cos2(x1, x2, y):
             losses.append(loss)
         else:
             assert False
-    return np.mean(losses)
+    return numpy.mean(losses)
 
 
 #-----------------------------------------------------------------------------#
@@ -299,7 +299,7 @@ def old_main():
     # Test `SiameseCNN`
 
     # Random number generators
-    rng = np.random.RandomState(42)
+    rng = numpy.random.RandomState(42)
     srng = RandomStreams(seed=42)
 
     # Generate random data
@@ -309,19 +309,19 @@ def old_main():
     width = 200
     in_channels = 1
     X = rng.randn(n_data, in_channels, height, width)
-    Y = np.asarray(rng.randint(2, size=n_pairs), dtype=np.int32)
+    Y = numpy.asarray(rng.randint(2, size=n_pairs), dtype=numpy.int32)
     print "Same/diff:", Y
 
     # Generate random pairs
     possible_pairs = list(itertools.combinations(range(n_data), 2))
     x1_indices = []
     x2_indices = []
-    for i_pair in rng.choice(np.arange(len(possible_pairs)), size=n_pairs, replace=False):
+    for i_pair in rng.choice(numpy.arange(len(possible_pairs)), size=n_pairs, replace=False):
         x1, x2 = possible_pairs[i_pair]
         x1_indices.append(x1)
         x2_indices.append(x2)
-    x1_indices = np.array(x1_indices)
-    x2_indices = np.array(x2_indices)
+    x1_indices = numpy.array(x1_indices)
+    x2_indices = numpy.array(x2_indices)
     print "x1 index: ", x1_indices
     print "x2 index: ", x2_indices
 
@@ -391,11 +391,66 @@ def old_main():
 
 
 def main():
-    x1 = tensor.matrix("x1", dtype=THEANOTYPE)
-    x2 = tensor.matrix("x2", dtype=THEANOTYPE)
-    x3 = tensor.matrix("x3", dtype=THEANOTYPE)
-    model = siamese.SiameseTripletLSTM(
-        rng, x1, x2, x3, n_in=3, n_hiddens=[10, 10])
+    x1 = tensor.tensor3("x1", dtype=THEANOTYPE)
+    x2 = tensor.tensor3("x2", dtype=THEANOTYPE)
+    x3 = tensor.tensor3("x3", dtype=THEANOTYPE)
+    x1_indices = tensor.ivector("x1_indices")
+    x2_indices = tensor.ivector("x2_indices")
+    x3_indices = tensor.ivector("x3_indices")
+    m1 = tensor.matrix("m1", dtype=THEANOTYPE)
+    m2 = tensor.matrix("m2", dtype=THEANOTYPE)
+    m3 = tensor.matrix("m3", dtype=THEANOTYPE)
+    rng = numpy.random.RandomState(0)
+    n_data = 1000
+    max_sequence_length = 50
+    n_dim = 5
+    n_hiddens = [10, 10]
+    model = SiameseTripletBatchLSTM(
+        rng, x1, x2, x3, m1, m2, m3, n_in=n_dim, n_hiddens=n_hiddens)
+
+    
+    xs = theano.shared(rng.randn(n_data, max_sequence_length, n_dim).astype(THEANOTYPE))
+    masks = theano.shared(rng.randn(n_data, max_sequence_length).astype(THEANOTYPE))
+
+    xs_numpy = xs.get_value()
+    masks_numpy = masks.get_value()
+    
+    x1_lstms = lstm.BatchMultiLayerLSTM(
+            rng, x1, m1, n_dim, n_hiddens=n_hiddens, output_type="last", prefix="lstms_x1")
+
+    f1 = theano.function(
+        inputs=[x1, m1],
+        outputs=x1_lstms.output)
+
+    small_n_data = 10
+    sequence_lengths = [5, 10, 15, 20]
+    xs0 = [rng.randn(small_n_data, n_dim).astype(THEANOTYPE)
+           for n_data in sequence_lengths]
+    xs_arr0, mask = lstm.batchify(xs0)
+
+    
+    f1_ind = theano.function(
+        inputs=[x1_indices],
+        outputs=x1_lstms.output,
+        givens={
+            x1: xs[x1_indices].swapaxes(0, 1),
+            m1: masks[x1_indices]})
+    
+    fbatch = theano.function(
+        inputs=[x1_indices, x2_indices, x3_indices],
+        outputs=[model.x1_lstms.output, model.x2_lstms.output, model.x3_lstms.output],
+        givens={
+            x1: xs[x1_indices].swapaxes(0, 1),
+            m1: masks[x1_indices],
+            x2: xs[x2_indices].swapaxes(0, 1),
+            m2: masks[x2_indices],
+            x3: xs[x3_indices].swapaxes(0, 1),
+            m3: masks[x3_indices],})
+    ind1 = numpy.asarray([1, 2], dtype=numpy.int32)
+    ind2 = numpy.asarray([1, 2], dtype=numpy.int32)
+    ind3 = numpy.asarray([1, 2], dtype=numpy.int32)
+
+    import pdb; pdb.set_trace()
 
 
 if __name__ == "__main__":
