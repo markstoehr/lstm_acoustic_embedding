@@ -196,9 +196,6 @@ def load_swbd_same_diff_mask(rng, data_dir):
         npz = np.load(npz_fn)
         utt_ids = sorted(npz.keys())
         rng.shuffle(utt_ids)
-        max_length = 0
-        for i in utt_ids:
-            max_length = max(max_length, len(npz[i]))
         
         ls = np.asarray([len(npz[i]) for i in utt_ids], dtype=np.int32)
         max_length = ls.max()

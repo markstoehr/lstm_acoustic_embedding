@@ -102,9 +102,10 @@ def apply_layers(model_dir, set, batch_size=None, i_layer=-1):
     # Compile function for passing segments through CNN layers
     x = model.input  # input to the tied layers
     x_i = T.lscalar()
+    normalized_output = model.output
     apply_model = theano.function(
         inputs=[x_i],
-        outputs=model.output,
+        outputs=normalized_output,
         givens={
             x: shared_x[
                 begins[x_i]:ends[x_i]

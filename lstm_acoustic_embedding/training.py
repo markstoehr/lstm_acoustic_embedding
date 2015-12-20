@@ -334,7 +334,7 @@ def train_fixed_epochs_with_validation(n_epochs, train_model,
         # for i_triplet in xrange(n_train_tripletes):
         for triplet_id, triplet in enumerate(train_triplet_iterator):
             # Calculate training loss for this triplet and update parameters
-            if triplet_id % 50 == 0:
+            if triplet_id % 100 == 0:
                 logger.info(str(datetime.now()) + " triplet_id: %d" % triplet_id)
             train_losses.append(train_model(*triplet))
 
@@ -357,7 +357,6 @@ def train_fixed_epochs_with_validation(n_epochs, train_model,
 
             best_validation_loss0 = validation_loss0
             i_epoch_best = i_epoch
-
             # Test model
             if test_model is not None:
                 test_losses = [test_model(*triplet) for triplet in test_triplet_iterator]
@@ -377,6 +376,7 @@ def train_fixed_epochs_with_validation(n_epochs, train_model,
         epoch_time = end_time - start_time
         # logger.info("Training loss: " + str(train_loss)  # + ", " + 
             # )
+        logger.info("best_validation_loss0 = " + str(best_validation_loss0))
         logger.info("Time: %f" % (epoch_time) + " sec, " + 
             "training loss: " + str(train_loss)  # + ", " + 
             )
