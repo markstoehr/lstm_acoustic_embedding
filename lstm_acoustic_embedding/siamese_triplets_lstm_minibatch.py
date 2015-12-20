@@ -42,9 +42,9 @@ default_options_dict = {
     "data_dir": "../data/nonpadded_icassp15.0",
     # "data_dir": "data/tmp",
     "n_same_pairs": int(100e3), # if None, all same pairs are used
-    "n_hiddens": [20, 20],
+    "n_hiddens": [512, 512],
     "rnd_seed": 42,
-    "batch_size": 40,
+    "batch_size": 100,
     "n_max_epochs": 20,
     "l1_weight": 0.0,
     "l2_weight": 0.0,
@@ -314,6 +314,7 @@ def train_siamese_triplets_lstm(options_dict):
     train_model = theano.function(
         inputs=[x1_indices, x2_indices, x3_indices],
         outputs=outputs,
+        updates=updates,
         givens={
             x1: train_x[x1_indices].swapaxes(0, 1)[:train_lengths[x1_indices].max()],
             m1: train_mask[x1_indices].T[:train_lengths[x1_indices].max()],
@@ -394,7 +395,7 @@ def check_argv():
     return parser.parse_args()
 
 
-def load_siamese_triplets_lstm(options_dict):
+def load_siamese_triplets_lstm_minibatch(options_dict):
 
     model_fn = path.join(options_dict["model_dir"], "model.pkl.gz")
 
@@ -410,9 +411,8 @@ def load_siamese_triplets_lstm(options_dict):
     rng = np.random.RandomState(options_dict["rnd_seed"])
 
     # Build model
-    input_shape = (options_dict["batch_size"], 1, 39, 200)
     model = siamese.SiameseTripleBatchLSTM(
-        rng, x1, x2, x3, n_hiddens=options_dict["n_hiddens"])
+        rng, x1, x2, x3, m1, m2, m3, n_in=39, n_hiddens=options_dict["n_hiddens"])
 
     # Load saved parameters
     logger.info("Reading: " + model_fn)
