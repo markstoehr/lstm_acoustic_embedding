@@ -42,9 +42,9 @@ default_options_dict = {
     "data_dir": "../data/nonpadded_icassp15.0",
     # "data_dir": "data/tmp",
     "n_same_pairs": int(100e3), # if None, all same pairs are used
-    "n_hiddens": [256, 256],
+    "n_hiddens": [20, 20],
     "rnd_seed": 42,
-    "batch_size": 1024,
+    "batch_size": 40,
     "n_max_epochs": 20,
     "l1_weight": 0.0,
     "l2_weight": 0.0,
@@ -257,11 +257,11 @@ def train_siamese_triplets_lstm(options_dict):
         outputs=outputs,
         givens={
             x1: dev_x[x1_indices].swapaxes(0, 1)[:dev_lengths[x1_indices].max()],
-            m1: dev_mask[x1_indices][:dev_lengths[x1_indices].max()],
+            m1: dev_mask[x1_indices].T[:dev_lengths[x1_indices].max()],
             x2: dev_x[x2_indices].swapaxes(0, 1)[:dev_lengths[x2_indices].max()],
-            m2: dev_mask[x2_indices][:dev_lengths[x2_indices].max()],
+            m2: dev_mask[x2_indices].T[:dev_lengths[x2_indices].max()],
             x3: dev_x[x3_indices].swapaxes(0, 1)[:dev_lengths[x3_indices].max()],
-            m3: dev_mask[x3_indices][:dev_lengths[x3_indices].max()],
+            m3: dev_mask[x3_indices].T[:dev_lengths[x3_indices].max()],
             },
         mode=theano_mode,
         )
@@ -270,11 +270,11 @@ def train_siamese_triplets_lstm(options_dict):
         outputs=outputs,
         givens={
             x1: test_x[x1_indices].swapaxes(0, 1)[:test_lengths[x1_indices].max()],
-            m1: test_mask[x1_indices][:test_lengths[x1_indices].max()],
+            m1: test_mask[x1_indices].T[:test_lengths[x1_indices].max()],
             x2: test_x[x2_indices].swapaxes(0, 1)[:test_lengths[x2_indices].max()],
-            m2: test_mask[x2_indices][:test_lengths[x2_indices].max()],
+            m2: test_mask[x2_indices].T[:test_lengths[x2_indices].max()],
             x3: test_x[x3_indices].swapaxes(0, 1)[:test_lengths[x3_indices].max()],
-            m3: test_mask[x3_indices][:test_lengths[x3_indices].max()],
+            m3: test_mask[x3_indices].T[:test_lengths[x3_indices].max()],
             },
         mode=theano_mode,
         )
@@ -316,11 +316,11 @@ def train_siamese_triplets_lstm(options_dict):
         outputs=outputs,
         givens={
             x1: train_x[x1_indices].swapaxes(0, 1)[:train_lengths[x1_indices].max()],
-            m1: train_mask[x1_indices][:train_lengths[x1_indices].max()],
+            m1: train_mask[x1_indices].T[:train_lengths[x1_indices].max()],
             x2: train_x[x2_indices].swapaxes(0, 1)[:train_lengths[x2_indices].max()],
-            m2: train_mask[x2_indices][:train_lengths[x2_indices].max()],
+            m2: train_mask[x2_indices].T[:train_lengths[x2_indices].max()],
             x3: train_x[x3_indices].swapaxes(0, 1)[:train_lengths[x3_indices].max()],
-            m3: train_mask[x3_indices][:train_lengths[x3_indices].max()],
+            m3: train_mask[x3_indices].T[:train_lengths[x3_indices].max()],
             },
         mode=theano_mode,
         )
