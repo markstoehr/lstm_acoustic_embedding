@@ -12,6 +12,8 @@ import os
 
 import data_io
 
+import couscous.mlp as mlp
+
 SEED = 123
 THEANOTYPE = theano.config.floatX
 numpy.random.seed(SEED)
@@ -27,6 +29,46 @@ def batchify(xs):
         xs_array[:x_length, x_index] = x
         mask[:x_length, x_index] = 1.0
     return xs_array, mask
+
+class BatchMultiLayerLSTMMLP(object):
+    def __init__(
+            self, rng, input, mask, n_in, n_out, lstm_n_hiddens, mlp_hidden_specs, srng=None,
+            lstm_parameters=None,
+            mlp_parameters=None, output_type="last", prefix="lstms_mlp", truncate_gradient=-1):
+        self.rng = rng
+        self.srng = srng
+        self.output_type = output_type
+        self.input = input
+        self.mask = mask
+        self.n_in = n_in
+        self.n_out = n_out
+        self.lstm_n_hiddens = lstm_n_hiddens
+        self.mlp_hidden_specs = mlp_hidden_specs
+        self.truncate_gradient = truncate_gradient
+        self.layers = []
+        self.lstms = BatchMultiLayerLSTM(
+            self.rng, self.input, self.mask, self.n_in, self.lstm_n_hiddens,
+            parameters=lstm_parameters, output_type=self.output_type,
+            prefix=prefix + "_lstms", truncate_gradient=self.truncate_gradient)
+        self.parameters = self.lstms.parameters[:]
+        self.mlp = mlp.MLP(
+            self.rng, self.lstms.output, self.lstm_n_hiddens[-1], self.n_out, self.mlp_hidden_specs, srng)
+        self.layers.extend(self.lstms.layers[:])
+        self.layers.extend(self.mlp.layers[:])
+        self.output = self.mlp.layers[-1].y_pred
+        self.parameters.extend(self.output[:])
+        self.y_pred = self.layers[-1].y_pred
+        self.negative_log_likelihood = self.layers[-1].negative_log_likelihood
+        self.errors = self.layers[-1].errors
+
+    def save(self, f):
+        for layer in self.layers:
+            layer.save(f)
+
+    def load(self, f):
+        for layer in self.layers:
+            layer.load(f)
+                        
 
 class BatchMultiLayerLSTM(object):
     """
@@ -85,6 +127,13 @@ class BatchMultiLayerLSTM(object):
         for layer in self.layers:
             layer.load(f)
 
+
+def BatchMultiLayerLSTMFactory(rng, n_in, n_hiddens, parameters=None,
+                               output_type="last", prefix="lstms", truncate_gradient=-1):
+    return lambda input, mask: BatchMultiLayerLSTM(
+        rng, input, mask, n_in, n_hiddens, parameters=parameters,
+        output_type=output_type, prefix=prefix,
+        truncate_gradient=truncate_gradient)
 
 class BatchLSTM(object):
     """
@@ -250,6 +299,45 @@ class MultiLayerLSTM(object):
         for layer in self.layers:
             layer.load(f)
 
+            
+class MultiLayerLSTMMLP(object):
+    def __init__(
+            self, rng, input, n_in, n_out, lstm_n_hiddens, mlp_hidden_specs, srng=None,
+            lstm_parameters=None,
+            mlp_parameters=None, output_type="last", prefix="lstms_mlp", truncate_gradient=-1):
+        self.rng = rng
+        self.srng = srng
+        self.output_type = output_type
+        self.input = input
+        self.n_in = n_in
+        self.n_out = n_out
+        self.lstm_n_hiddens = lstm_n_hiddens
+        self.mlp_hidden_specs = mlp_hidden_specs
+        self.truncate_gradient = truncate_gradient
+        self.layers = []
+        self.lstms = MultiLayerLSTM(
+            self.rng, self.input, self.n_in, self.lstm_n_hiddens,
+            parameters=lstm_parameters, output_type=self.output_type,
+            prefix=prefix + "_lstms", truncate_gradient=self.truncate_gradient)
+        self.parameters = self.lstms.parameters[:]
+        self.mlp = mlp.MLP(
+            self.rng, self.lstms.output, self.lstm_n_hiddens[-1], self.n_out, self.mlp_hidden_specs, srng)
+        self.layers.extend(self.lstms.layers[:])
+        self.layers.extend(self.mlp.layers[:])
+        self.output = self.mlp.layers[-1].y_pred
+        self.parameters.extend(self.output[:])
+        self.y_pred = self.layers[-1].y_pred
+        self.negative_log_likelihood = self.layers[-1].negative_log_likelihood
+        self.errors = self.layers[-1].errors
+
+    def save(self, f):
+        for layer in self.layers:
+            layer.save(f)
+
+    def load(self, f):
+        for layer in self.layers:
+            layer.load(f)
+                                    
 class LSTM(object):
     """
     Long short term memory network.
