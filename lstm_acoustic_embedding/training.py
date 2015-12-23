@@ -325,6 +325,11 @@ def train_fixed_epochs_with_validation(n_epochs, train_model,
     best_validation_loss0 = np.inf
     test_loss = np.inf
     i_epoch_best = 0
+    if save_model_func is not None:
+                f = smart_open(save_model_fn, "wb")
+                save_model_func(f)
+                f.close()
+
     for i_epoch in xrange(n_epochs):
 
         # Loop over training tripletes
