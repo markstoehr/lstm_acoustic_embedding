@@ -24,7 +24,7 @@ import theano.tensor as T
 sys.path.append(path.join("..", "..", "src", "couscous"))
 
 from couscous import logistic, mlp, theano_utils, training
-import apply_layers
+import lstm_mlp_apply_layers
 import data_io
 import samediff
 import lstm
@@ -230,7 +230,7 @@ def train_mlp(options_dict):
 
     # Pass data trough model
     logger.info("Performing same-different evaluation")
-    layers_output_dict = apply_layers.apply_layers(
+    layers_output_dict = lstm_mlp_apply_layers.apply_layers(
         options_dict["model_dir"], "dev", batch_size=645, i_layer=options_dict["i_layer_eval"]
         )
     utt_ids = sorted(layers_output_dict.keys())
