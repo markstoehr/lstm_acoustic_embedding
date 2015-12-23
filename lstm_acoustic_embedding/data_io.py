@@ -151,6 +151,87 @@ def load_swbd_labelled(rng, data_dir, min_count=1):
 
     return [(train_x, train_y), (dev_x, dev_y), (test_x, test_y)], word_to_i_map
 
+def load_swbd_labelled_mask(rng, data_dir, min_count=1):
+    """Load the Switchboard data with their labels to fixed lengths with masks for
+    LSTM training.
+
+    Only tokens that occur at least `min_count` times in the training set
+    is considered.
+
+    """
+
+    def get_data_and_labels(set):
+
+        npz_fn = path.join(data_dir, "swbd." + set + ".npz")
+        logger.info("Reading: " + npz_fn)
+
+        # Load data and shuffle
+        npz = np.load(npz_fn)
+        utts = sorted(npz.keys())
+        rng.shuffle(utts)
+        ls = np.asarray([len(npz[i]) for i in utts], dtype=np.int32)
+        max_length = ls.max()
+        xs = np.zeros((len(ls), max_length, npz[utts[0]].shape[1]),
+                      dtype=THEANOTYPE)
+        masks = np.zeros((len(ls), max_length), dtype=THEANOTYPE)
+        for j, i in enumerate(utts):
+            xs[j][:ls[j]] = npz[i]
+            masks[j][:ls[j]] = 1.0
+        # Get labels for each utterance
+        labels = swbd_utts_to_labels(utts)
+        return xs, masks, ls, labels
+
+    train_x, train_mask, train_l, train_labels = get_data_and_labels("train")
+    dev_x, dev_mask, dev_l, dev_labels = get_data_and_labels("dev")
+    test_x, test_mask, test_l, test_labels = get_data_and_labels("test")
+
+    logger.info("Finding types with at least " + str(min_count) + " tokens")
+
+    # Determine the types with the minimum count
+    type_counts = {}
+    for label in train_labels:
+        if not label in type_counts:
+            type_counts[label] = 0
+        type_counts[label] += 1
+    min_types = set()
+    i_type = 0
+    word_to_i_map = {}
+    for label in type_counts:
+        if type_counts[label] >= min_count:
+            min_types.add(label)
+            word_to_i_map[label] = i_type
+            i_type += 1
+
+    # Filter the sets
+    def filter_set(x, m, l, labels):
+        filtered_x = []
+        filtered_m = []
+        filtered_l = []
+        filtered_i_labels = []
+        for cur_x, cur_m, cur_l, label in zip(x, m, l, labels):
+            if label in word_to_i_map:
+                filtered_x.append(cur_x)
+                filtered_m.append(cur_m)
+                filtered_l.append(cur_l)
+                filtered_i_labels.append(word_to_i_map[label])
+        return filtered_x, filtered_m, filtered_l, filtered_i_labels
+    train_x, train_m, train_l, train_labels = filter_set(train_x, train_mask, train_l, train_labels)
+    dev_x, dev_m, dev_l, dev_labels = filter_set(dev_x, dev_mask, dev_l, dev_labels)
+    test_x, test_m, test_l, test_labels = filter_set(test_x, test_mask, test_l, test_labels)
+
+    # Convert to shared variables
+    def shared_dataset(x, m, l, y, borrow=True):
+        shared_x = theano.shared(np.asarray(x, dtype=THEANOTYPE), borrow=borrow)
+        shared_m = theano.shared(np.asarray(m, dtype=THEANOTYPE), borrow=borrow)
+        shared_l = theano.shared(np.asarray(l, dtype="int32"), borrow=borrow)
+        shared_y = theano.shared(np.asarray(y, dtype=THEANOTYPE), borrow=borrow)
+        return shared_x, shared_m, shared_l, T.cast(shared_y, "int32")
+    train_x, train_m, train_l, train_y = shared_dataset(train_x, train_m, train_l, train_labels)
+    dev_x, dev_m, dev_l, dev_y = shared_dataset(dev_x, dev_m, dev_l, dev_labels)
+    test_x, test_m, test_l, test_y = shared_dataset(test_x, test_m, test_l, test_labels)
+
+    return [(train_x, train_m, train_l, train_y), (dev_x, dev_m, dev_l, dev_y), (test_x, test_m, test_l, test_y)], word_to_i_map
+
 
 
 def load_swbd_same_diff(rng, data_dir):
