@@ -56,7 +56,7 @@ class BatchMultiLayerLSTMMLP(object):
         self.layers.extend(self.lstms.layers[:])
         self.layers.extend(self.mlp.layers[:])
         self.output = self.mlp.layers[-1].y_pred
-        self.parameters.extend(self.mlp.parameters)
+        self.parameters.extend(self.mlp.parameters[:])
         self.y_pred = self.layers[-1].y_pred
         self.negative_log_likelihood = self.layers[-1].negative_log_likelihood
         self.errors = self.layers[-1].errors
@@ -325,7 +325,7 @@ class MultiLayerLSTMMLP(object):
         self.layers.extend(self.lstms.layers[:])
         self.layers.extend(self.mlp.layers[:])
         self.output = self.mlp.layers[-1].y_pred
-        self.parameters.extend(self.output[:])
+        self.parameters.extend(self.mlp.parameters)
         self.y_pred = self.layers[-1].y_pred
         self.negative_log_likelihood = self.layers[-1].negative_log_likelihood
         self.errors = self.layers[-1].errors
