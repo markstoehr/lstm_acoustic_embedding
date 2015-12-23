@@ -50,16 +50,16 @@ def check_argv():
     return parser.parse_args()
 
 
-# def load_model(options_dict):
-#     if "siamese_triplets" in options_dict["model_dir"]:
-#         model = train_siamese_triplets_cnn.load_siamese_triplets_cnn(options_dict)
-#     elif "siamese" in options_dict["model_dir"]:
-#         model = train_siamese_cnn.load_siamese_cnn(options_dict)
-#     elif "mlp" in options_dict["model_dir"]:
-#         model = train_mlp.load_mlp(options_dict)
-#     else:
-#         model = train_cnn.load_cnn(options_dict)
-#     return model
+def load_model(options_dict):
+    if "siamese_triplets" in options_dict["model_dir"]:
+        model = siamese_triplets_lstm.load_siamese_triplets_lstm(options_dict)
+    elif "siamese" in options_dict["model_dir"]:
+        model = train_siamese_cnn.load_siamese_cnn(options_dict)
+    elif "mlp" in options_dict["model_dir"]:
+        model = train_mlp.load_mlp(options_dict)
+    else:
+        model = train_cnn.load_cnn(options_dict)
+    return model
 
 
 def apply_layers(model_dir, set, batch_size=None, i_layer=-1):
@@ -80,8 +80,8 @@ def apply_layers(model_dir, set, batch_size=None, i_layer=-1):
     npz = numpy.load(npz_fn)
     logger.info("Loaded " + str(len(npz.keys())) + " segments")
 
-    if "siamese_triplets" in options_dict["model_dir"]:
-        model = siamese_triplets_lstm.load_siamese_triplets_lstm(options_dict)
+    model = load_model(options_dict)
+        
 
     # Load data into Theano shared variable
     utt_ids = sorted(npz.keys())
