@@ -123,6 +123,103 @@ class SiameseTripletBatchLSTMNN(object):
         """Load the model parameters from the opened pickle file `f`."""
         self.model.load(f)
 
+class SiameseTripletLSTMNN(object):
+    """
+    Siamese triplet convolutional neural network, allowing for hinge losses.
+
+    An example use of this network is to train a metric on triplets A, B, X.
+    Assume A-X is a same pair and B-X a different pair. Then a cost can be
+    defined such that dist(A, X) > dist(B, X) by some margin. By convention the
+    same-pair is taken as `x1_layers` and `x2_layers`, while the different pair
+    is taken as `x1_layers` and `x3_layers`.
+
+    Attributes
+    ----------
+    x1_layers : list of ConvMaxPoolLayer and HiddenLayer
+        Attributes are similar to `SiameseCNN`, except that now there are
+        three tied networks, and so there is `x1_layers`, `x2_layers` and
+        `x3_layers`, with corresponding additional layers when using dropout.
+    """
+
+    def __init__(self, rng, input_x1, input_x2, input_x3, n_in, n_lstm_hiddens, mlp_hidden_specs):
+        """
+        Initialize symbolic parameters and expressions.
+
+        Many of the parameters are identical to that of `cnn.build_cnn_layers`.
+        Some of the other parameters are described below.
+
+        Parameters
+        ----------
+        input_x1 : symbolic matrix
+            The matrix is reshaped according to `input_shape` and then treated
+            as the input of the first side of the Siamese network.
+        input_x2 : symbolic matrix
+            The matrix is reshaped according to `input_shape` and then treated
+            as the input of the second side of the Siamese network, forming a
+            same-pair with `input_x1`.
+        input_x3 : symbolic matrix
+            The matrix is reshaped according to `input_shape` and then treated
+            as the input of the third side of the Siamese network, forming a
+            different-pair with `input_x1`.
+        """
+
+        # Build common layers to which the Siamese layers are tied
+        input = T.matrix("x", dtype=THEANOTYPE)
+        self.input = input
+        self.n_in = n_in
+        self.n_lstm_hiddens = n_lstm_hiddens
+        self.mlp_hidden_specs = mlp_hidden_specs
+        self.model = lstm.MultiLayerLSTMNN(
+            rng, input, n_in, n_lstm_hiddens, mlp_hidden_specs,  output_type="last", prefix="lstmsnn")
+        self.n_layers = len(self.model.layers)
+        
+        self.x1_model = lstm.MultiLayerLSTMNN(
+            rng, input_x1, n_in, n_lstm_hiddens, mlp_hidden_specs, lstm_parameters=self.model.lstm_parameters,
+            mlp_parameters=self.model.mlp_parameters,
+            output_type="last", prefix="lstmsnn_x1")
+        self.x2_model = lstm.MultiLayerLSTMNN(
+            rng, input_x2, n_in, n_lstm_hiddens, mlp_hidden_specs, lstm_parameters=self.model.lstm_parameters,
+            mlp_parameters=self.model.mlp_parameters,
+            output_type="last", prefix="lstmsnn_x2")
+        self.x3_model = lstm.MultiLayerLSTMNN(
+            rng, input_x3, n_in, n_lstm_hiddens, mlp_hidden_specs, lstm_parameters=self.model.lstm_parameters,
+            mlp_parameters=self.model.mlp_parameters,
+            output_type="last", prefix="lstmsnn_x3")
+
+        self.parameters = self.model.parameters
+        self.l2 = self.model.l2
+        self.output = self.model.output
+
+    def loss_hinge_cos(self, margin=0.5):
+        return _loss_hinge_cos(
+            self.x1_model.output,
+            self.x2_model.output,
+            self.x3_model.output,
+            margin
+            )
+
+    def cos_same(self):
+        """
+        Return symbolic expression for the mean cosine distance of the same
+        pairs alone.
+        """
+        return T.mean(cos_distance(self.x1_model.output, self.x2_model.output))
+
+    def cos_diff(self):
+        """
+        Return symbolic expression for the mean cosine distance of the
+        different pairs alone.
+        """
+        return T.mean(cos_distance(self.x1_model.output, self.x3_model.output))
+
+    def save(self, f):
+        """Pickle the model parameters to opened file `f`."""
+        self.model.save(f)
+
+    def load(self, f):
+        """Load the model parameters from the opened pickle file `f`."""
+        self.model.load(f)
+
 
 class SiameseTripletBatchLSTM(object):
     """
