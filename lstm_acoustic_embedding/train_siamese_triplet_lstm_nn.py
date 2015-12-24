@@ -395,8 +395,32 @@ def check_argv():
         sys.exit(1)
     return parser.parse_args()
 
+def load_siamese_triplets_lstm_nn(options_dict):
 
-def load_siamese_triplets_lstm_minibatch(options_dict):
+    model_fn = path.join(options_dict["model_dir"], "model.pkl.gz")
+
+    # Symbolic variables
+    x1 = tensor.matrix("x1", dtype=THEANOTYPE)
+    x2 = tensor.matrix("x2", dtype=THEANOTYPE)
+    x3 = tensor.matrix("x3", dtype=THEANOTYPE)
+
+    # Random number generators
+    rng = np.random.RandomState(options_dict["rnd_seed"])
+
+    # Build model
+    model = siamese.SiameseTripleLSTMNN(
+        rng, x1, x2, x3, n_in=39, n_hiddens=options_dict["n_hiddens"], mlp_hidden_specs=options_dict["hidden_layer_specs"])
+
+    # Load saved parameters
+    logger.info("Reading: " + model_fn)
+    f = data_io.smart_open(model_fn)
+    model.load(f)
+    f.close()
+
+    return model
+
+
+def load_siamese_triplets_lstm_nn_minibatch(options_dict):
 
     model_fn = path.join(options_dict["model_dir"], "model.pkl.gz")
 
