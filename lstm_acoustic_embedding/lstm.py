@@ -9,6 +9,7 @@ import mlp
 import utils
 import pickle
 import os
+import copy
 
 import data_io
 
@@ -30,6 +31,82 @@ def batchify(xs):
         mask[:x_length, x_index] = 1.0
     return xs_array, mask
 
+class BatchMultiLayerLSTMNN(object):
+    """
+    LSTM with fully connected hidden layers on top.
+    """
+    def __init__(
+            self, rng, input, mask, n_in, lstm_n_hiddens, mlp_hidden_specs, srng=None,
+            lstm_parameters=None,
+            mlp_parameters=None, output_type="last", prefix="lstms_mlp", truncate_gradient=-1):
+        self.rng = rng
+        self.srng = srng
+        self.output_type = output_type
+        self.input = input
+        self.mask = mask
+        self.n_in = n_in
+        self.lstm_n_hiddens = lstm_n_hiddens
+        self.mlp_hidden_specs = mlp_hidden_specs
+        self.truncate_gradient = truncate_gradient
+        self.layers = []
+        self.l2 = 0.
+
+        self.mlp_hidden_specs = mlp_hidden_specs
+        for layer_spec in mlp_hidden_specs:
+            mlp.activation_str_to_op(layer_spec)
+            
+        self.lstms = BatchMultiLayerLSTM(
+            self.rng, self.input, self.mask, self.n_in, self.lstm_n_hiddens,
+            parameters=lstm_parameters, output_type=self.output_type,
+            prefix=prefix + "_lstms", truncate_gradient=self.truncate_gradient)
+
+        self.l2 += self.lstms.l2
+        self.parameters = self.lstms.parameters[:]
+        self.lstm_parameters = self.lstms.parameters
+        
+        # get the mlp parameters set up so that we can determine initilization as needed
+        if mlp_parameters is not None:
+            mlp_parameters = mlp_parameters[:]
+        else:
+            mlp_parameters = None
+
+        # these are loop constants that we update and keep track of
+        cur_input = self.lstms.output
+        cur_n_in = self.lstm_n_hiddens[-1]
+        self.mlp_layers = []
+        self.mlp_parameters = []
+        for i_layer, layer_spec in enumerate(self.mlp_hidden_specs):
+            if mlp_parameters is not None:
+                W = mlp_parameters.pop(0)
+                b = mlp_parameters.pop(0)
+            else:
+                W = None
+                b = None
+
+            try:
+                layer =mlp.HiddenLayer(
+                    rng=rng, input=cur_input, d_in=cur_n_in, d_out=layer_spec["units"],
+                    activation=layer_spec["activation"], W=W, b=b)
+            except: import pdb; pdb.set_trace()
+            self.mlp_layers.append(layer)
+            cur_input = layer.output
+            cur_n_in = layer_spec["units"]
+            self.mlp_parameters.extend([layer.W, layer.b])
+            self.l2 += (layer.W**2).sum()
+            
+        self.output = cur_input
+        self.layers.extend(self.lstms.layers[:])
+        self.layers.extend(self.mlp_layers[:])
+        self.parameters.extend(self.mlp_parameters[:])
+
+    def save(self, f):
+        for layer in self.layers:
+            layer.save(f)
+
+    def load(self, f):
+        for layer in self.layers:
+            layer.load(f)
+
 class BatchMultiLayerLSTMMLP(object):
     def __init__(
             self, rng, input, mask, n_in, n_out, lstm_n_hiddens, mlp_hidden_specs, srng=None,
@@ -46,13 +123,16 @@ class BatchMultiLayerLSTMMLP(object):
         self.mlp_hidden_specs = mlp_hidden_specs
         self.truncate_gradient = truncate_gradient
         self.layers = []
+        self.l2 = 0.
         self.lstms = BatchMultiLayerLSTM(
             self.rng, self.input, self.mask, self.n_in, self.lstm_n_hiddens,
             parameters=lstm_parameters, output_type=self.output_type,
             prefix=prefix + "_lstms", truncate_gradient=self.truncate_gradient)
+        self.l2 += self.lstms.l2
         self.parameters = self.lstms.parameters[:]
         self.mlp = mlp.MLP(
             self.rng, self.lstms.output, self.lstm_n_hiddens[-1], self.n_out, self.mlp_hidden_specs, srng)
+        self.l2 += self.mlp.l2
         self.layers.extend(self.lstms.layers[:])
         self.layers.extend(self.mlp.layers[:])
         self.output = self.mlp.layers[-1].output
@@ -296,6 +376,80 @@ class MultiLayerLSTM(object):
 
     def load(self, f):
         """Load the model parameters from the opened pickle file `f`."""
+        for layer in self.layers:
+            layer.load(f)
+
+
+class MultiLayerLSTMNN(object):
+    """
+    LSTM with fully connected hidden layers on top.
+    """
+    def __init__(
+            self, rng, input, n_in, lstm_n_hiddens, mlp_hidden_specs, srng=None,
+            lstm_parameters=None,
+            mlp_parameters=None, output_type="last", prefix="lstms_mlp", truncate_gradient=-1):
+        self.rng = rng
+        self.srng = srng
+        self.output_type = output_type
+        self.input = input
+        self.n_in = n_in
+        self.lstm_n_hiddens = lstm_n_hiddens
+        self.mlp_hidden_specs = mlp_hidden_specs
+        self.truncate_gradient = truncate_gradient
+        self.layers = []
+        self.l2 = 0.
+
+        self.mlp_hidden_specs = mlp_hidden_specs
+        for layer_spec in mlp_hidden_specs:
+            mlp.activation_str_to_op(layer_spec)
+            
+        self.lstms = MultiLayerLSTM(
+            self.rng, self.input, self.n_in, self.lstm_n_hiddens,
+            parameters=lstm_parameters, output_type=self.output_type,
+            prefix=prefix + "_lstms", truncate_gradient=self.truncate_gradient)
+        self.lstm_parameters = self.lstms.parameters
+        self.l2 += self.lstms.l2
+        self.parameters = self.lstms.parameters[:]
+
+        
+        # get the mlp parameters set up so that we can determine initilization as needed
+        if mlp_parameters is not None:
+            mlp_parameters = mlp_parameters[:]
+        else:
+            mlp_parameters = None
+
+        # these are loop constants that we update and keep track of
+        cur_input = self.lstms.output
+        cur_n_in = self.lstm_n_hiddens[-1]
+        self.mlp_layers = []
+        self.mlp_parameters = []
+        for i_layer, layer_spec in enumerate(self.mlp_hidden_specs):
+            if mlp_parameters is not None:
+                W = mlp_parameters.pop(0)
+                b = mlp_parameters.pop(0)
+            else:
+                W = None
+                b = None
+
+            layer =mlp.HiddenLayer(
+                rng=rng, input=cur_input, d_in=cur_n_in, d_out=layer_spec["units"],
+                activation=layer_spec["activation"], W=W, b=b)
+            self.mlp_layers.append(layer)
+            cur_input = layer.output
+            cur_n_in = layer_spec["units"]
+            self.mlp_parameters.extend([layer.W, layer.b])
+            self.l2 += (layer.W**2).sum()
+            
+        self.output = cur_input
+        self.layers.extend(self.lstms.layers[:])
+        self.layers.extend(self.mlp_layers[:])
+        self.parameters.extend(self.mlp_parameters[:])
+
+    def save(self, f):
+        for layer in self.layers:
+            layer.save(f)
+
+    def load(self, f):
         for layer in self.layers:
             layer.load(f)
 

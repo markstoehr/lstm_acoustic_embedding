@@ -19,3 +19,8 @@ python lstm_mlp_apply_layers.py ../models/lstm_mlp.1 test
 python eval_samediff.py ../models/lstm_mlp.1/swbd.test.layer_-1.npz
 
 # lstm_mlp siamese triplets
+python eval_samediff.py models/mlp.1/swbd.dev.layer_-1.npz
+
+# lstm nn
+
+python train_siamese_triplet_lstm_nn.py ../models/siamese_triplet_lstm_nn.1/
