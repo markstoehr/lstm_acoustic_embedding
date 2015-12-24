@@ -9,6 +9,16 @@ python eval_samediff.py ../models/siamese_triplets_lstm_minibatch.2/swbd.dev.lay
 
 python train_lstm_mlp.py ../models/lstm_mlp.1
 python lstm_mlp_apply_layers.py ../models/lstm_mlp.1 dev
+python eval_samediff.py ../models/lstm_mlp.1/swbd.dev.layer_-1.npz
+
+python train_lstm_mlp.py ../models/lstm_mlp.2
+python lstm_mlp_apply_layers.py ../models/lstm_mlp.1 dev
+python eval_samediff.py ../models/lstm_mlp.1/swbd.dev.layer_-1.npz
+
+python lstm_mlp_apply_layers.py ../models/lstm_mlp.1 test
+python eval_samediff.py ../models/lstm_mlp.1/swbd.test.layer_-1.npz
+
+# lstm_mlp siamese triplets
 python eval_samediff.py models/mlp.1/swbd.dev.layer_-1.npz
 
 # lstm nn
