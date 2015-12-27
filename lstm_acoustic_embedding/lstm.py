@@ -177,7 +177,7 @@ class BatchMultiLayerLSTM(object):
         cur_in = n_in
         self.l2 = 0.
         for layer_id, n_hidden in enumerate(n_hiddens):
-            cur_output_type = output_type if layer_id == self.n_layers-1 else "full"
+            cur_output_type = output_type if layer_id == self.n_layers-1 else output_type
             if cur_parameters is None:
                 W = None
                 U = None
@@ -361,7 +361,7 @@ class MultiLayerLSTM(object):
         cur_in = n_in
         self.l2 = 0.
         for layer_id, n_hidden in enumerate(n_hiddens):
-            cur_output_type = output_type if layer_id == self.n_layers-1 else "full"
+            cur_output_type = output_type if layer_id == self.n_layers-1 else output_type
             if cur_parameters is None:
                 W = None
                 U = None
