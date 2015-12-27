@@ -1,3 +1,10 @@
+# December 26, 2015
+
+python siamese_triplets_lstm_minibatch.py ../models/siamese_triplets_lstm_max_dropout.1
+
+
+# 
+
 python train_mlp.py ../models/mlp.1
 python apply_layers.py models/mlp.1 dev
 python eval_samediff.py models/mlp.1/swbd.dev.layer_-1.npz
