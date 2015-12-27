@@ -345,7 +345,7 @@ class SiameseTripletLSTM(object):
         `x3_layers`, with corresponding additional layers when using dropout.
     """
 
-    def __init__(self, rng, input_x1, input_x2, input_x3, n_in, n_hiddens):
+    def __init__(self, rng, input_x1, input_x2, input_x3, n_in, n_hiddens, output_type="last", srng=None, dropout=0.0):
         """
         Initialize symbolic parameters and expressions.
 
@@ -374,17 +374,19 @@ class SiameseTripletLSTM(object):
         self.n_hiddens = n_hiddens
         self.n_layers = len(self.n_hiddens)
         self.lstms = lstm.MultiLayerLSTM(
-            rng, input, n_in, n_hiddens, output_type="last", prefix="lstms")
+            rng, input, n_in, n_hiddens, output_type="last", prefix="lstms", srng=srng, dropout=dropout)
 
+        self.dropout = dropout
+        
         self.x1_lstms = lstm.MultiLayerLSTM(
             rng, input_x1, n_in, n_hiddens, parameters=self.lstms.parameters,
-            output_type="last", prefix="lstms_x1")
+            output_type="last", prefix="lstms_x1", srng=srng, dropout=dropout)
         self.x2_lstms = lstm.MultiLayerLSTM(
             rng, input_x2, n_in, n_hiddens, parameters=self.lstms.parameters,
-            output_type="last", prefix="lstms_x2")
+            output_type="last", prefix="lstms_x2", srng=srng, dropout=dropout)
         self.x3_lstms = lstm.MultiLayerLSTM(
             rng, input_x3, n_in, n_hiddens, parameters=self.lstms.parameters,
-            output_type="last", prefix="lstms_x3")
+            output_type="last", prefix="lstms_x3", srng=srng, dropout=dropout)
 
         self.parameters = self.lstms.parameters
         self.output = self.lstms.output

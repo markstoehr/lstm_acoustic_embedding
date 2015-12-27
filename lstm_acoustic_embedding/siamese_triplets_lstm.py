@@ -358,8 +358,12 @@ def load_siamese_triplets_lstm(options_dict):
 
     # Build model
     input_shape = (options_dict["batch_size"], 1, 39, 200)
+    if options_dict.has_key("sequence_output_type"):
+        sequence_output_type = options_dict["sequence_output_type"]
+    else:
+        sequence_output_type = "last"
     model = siamese.SiameseTripletLSTM(
-        rng, x1, x2, x3, n_in=39, n_hiddens=options_dict["n_hiddens"])
+        rng, x1, x2, x3, n_in=39, n_hiddens=options_dict["n_hiddens"], output_type=sequence_output_type)
 
     # Load saved parameters
     logger.info("Reading: " + model_fn)
