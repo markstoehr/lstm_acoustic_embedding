@@ -154,7 +154,11 @@ class BatchMultiLayerLSTM(object):
     """
     LSTM with multiple layers.
     """
-    def __init__(self, rng, input, mask, n_in, n_hiddens, parameters=None, output_type="last", prefix="lstms", truncate_gradient=-1):
+    def __init__(self, rng, input, mask, n_in, n_hiddens, parameters=None,
+                 output_type="last", prefix="lstms", truncate_gradient=-1,
+                 srng=None, dropout=0.0):
+        self.output_type = output_type
+        self.dropout = dropout
         self.truncate_gradient = truncate_gradient
         self.n_layers = len(n_hiddens)
         self.layers = []
@@ -196,6 +200,10 @@ class BatchMultiLayerLSTM(object):
             self.l2 += self.layers[-1].l2
             cur_in = n_hidden
         self.output = self.layers[-1].output
+        if srng is not None and dropout > 0.0:
+            self.dropout_output = theano_utils.apply_dropout(
+                srng, self.output, p=dropout)
+
 
     def save(self, f):
         """Pickle the model parameters to opened file `f`."""
@@ -264,6 +272,10 @@ class BatchLSTM(object):
                                         prefix=self.prefix, truncate_gradient=self.truncate_gradient)
         if self.output_type == "last":
             self.output = hidden_features[-1]
+        elif self.output_type == "mean":
+            self.output = hidden_features.mean(axis=0)
+        elif self.output_type == "max":
+            self.output = hidden_features.max(axis=0)
         else:
             self.output = hidden_features
 
@@ -329,12 +341,15 @@ class MultiLayerLSTM(object):
     """
     LSTM with multiple layers.
     """
-    def __init__(self, rng, input, n_in, n_hiddens, parameters=None, output_type="last", prefix="lstms", truncate_gradient=-1):
+    def __init__(self, rng, input, n_in, n_hiddens, parameters=None,
+                 output_type="last", prefix="lstms", truncate_gradient=-1,
+                 srng=None, dropout=0.0):
         self.n_layers = len(n_hiddens)
         self.layers = []
         self.input = input
         self.n_in = n_in
         self.prefix = prefix
+        self.dropout = dropout
         # reverse and copy because we want to pop off the parameters
         if parameters is not None:
             cur_parameters = list(parameters)[::-1]
@@ -367,7 +382,13 @@ class MultiLayerLSTM(object):
             self.parameters.append(self.layers[-1].b)
             self.l2 += self.layers[-1].l2
             cur_in = n_hidden
+
+        
         self.output = self.layers[-1].output
+        if srng is not None and dropout > 0.0:
+            self.dropout_output = theano_utils.apply_dropout(
+                srng, self.output, p=dropout)
+        
 
     def save(self, f):
         """Pickle the model parameters to opened file `f`."""
@@ -543,6 +564,10 @@ class LSTM(object):
                                         prefix=self.prefix, truncate_gradient=self.truncate_gradient)
         if self.output_type == "last":
             self.output = hidden_features[-1]
+        elif self.output_type == "max":
+            self.output = hidden_features.max(axis=0)
+        elif self.output_type == "mean":
+            self.output = hidden_features.mean(axis=0)
         else:
             self.output = hidden_features
 
