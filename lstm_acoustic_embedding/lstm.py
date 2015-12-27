@@ -14,6 +14,7 @@ import copy
 import data_io
 
 import couscous.mlp as mlp
+import couscous.theano_utils as theano_utils
 
 SEED = 123
 THEANOTYPE = theano.config.floatX
