@@ -58,7 +58,8 @@ default_options_dict = {
     #     "learning_rate": 0.01,
     #     "momentum": 0.9
     #     },
-    "dropout_rates": None,      # a list of rates for each layer or None
+    "dropout_rates": .7,      # a list of rates for each layer or None
+    "sequence_output_type": "max", # use max over the series to get the vector output
     "conv_layer_specs": [       # activation can be "sigmoid", "tanh", "relu", "linear"
         {"filter_shape": (96, 1, 39, 9), "pool_shape": (1, 3), "activation": "relu"},
         {"filter_shape": (96, 96, 1, 8), "pool_shape": (1, 3), "activation": "relu"},
@@ -232,7 +233,7 @@ def train_siamese_triplets_lstm(options_dict):
     # Build model
     input_shape = (options_dict["batch_size"], 1, 39, 200)
     model = siamese.SiameseTripletBatchLSTM(
-        rng, x1, x2, x3, m1, m2, m3, n_in=39, n_hiddens=options_dict["n_hiddens"])
+        rng, x1, x2, x3, m1, m2, m3, n_in=39, n_hiddens=options_dict["n_hiddens"], output_type=options_dict["output_type"], srng=srng, dropout=options_dict["dropout_rates"])
     if options_dict["loss"] == "hinge_cos":
         if options_dict["dropout_rates"] is not None:
             loss = model.dropout_loss_hinge_cos(options_dict["margin"])
