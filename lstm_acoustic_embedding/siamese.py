@@ -100,7 +100,7 @@ class SiameseTripletBatchLSTMNN(object):
             self.x3_model.output,
             margin
             )
-
+    
     def cos_same(self):
         """
         Return symbolic expression for the mean cosine distance of the same
@@ -239,7 +239,7 @@ class SiameseTripletBatchLSTM(object):
         `x3_layers`, with corresponding additional layers when using dropout.
     """
 
-    def __init__(self, rng, input_x1, input_x2, input_x3, input_m1, input_m2, input_m3, n_in, n_hiddens):
+    def __init__(self, rng, input_x1, input_x2, input_x3, input_m1, input_m2, input_m3, n_in, n_hiddens, output_type="last", srng=None, dropout=0.0):
         """
         Initialize symbolic parameters and expressions.
 
@@ -270,17 +270,19 @@ class SiameseTripletBatchLSTM(object):
         self.n_hiddens = n_hiddens
         self.n_layers = len(self.n_hiddens)
         self.lstms = lstm.BatchMultiLayerLSTM(
-            rng, input, mask, n_in, n_hiddens, output_type="last", prefix="lstms")
+            rng, input, mask, n_in, n_hiddens, output_type=output_type, prefix="lstms", srng=srng, dropout=dropout)
 
+        self.dropout = dropout
+        
         self.x1_lstms = lstm.BatchMultiLayerLSTM(
             rng, input_x1, input_m1, n_in, n_hiddens, parameters=self.lstms.parameters,
-            output_type="last", prefix="lstms_x1")
+            output_type=output_type, prefix="lstms_x1", srng=srng, dropout=dropout)
         self.x2_lstms = lstm.BatchMultiLayerLSTM(
             rng, input_x2, input_m2, n_in, n_hiddens, parameters=self.lstms.parameters,
-            output_type="last", prefix="lstms_x2")
+            output_type=output_type, prefix="lstms_x2", srng=srng, dropout=dropout)
         self.x3_lstms = lstm.BatchMultiLayerLSTM(
             rng, input_x3, input_m3, n_in, n_hiddens, parameters=self.lstms.parameters,
-            output_type="last", prefix="lstms_x3")
+            output_type=output_type, prefix="lstms_x3", srng=srng, dropout=dropout)
 
         self.parameters = self.lstms.parameters
         self.l2 = self.lstms.l2
@@ -291,6 +293,14 @@ class SiameseTripletBatchLSTM(object):
             self.x1_lstms.output,
             self.x2_lstms.output,
             self.x3_lstms.output,
+            margin
+            )
+
+    def dropout_loss_hinge_cos(self, margin=0.5):
+        return _loss_hinge_cos(
+            self.x1_lstms.dropout_output,
+            self.x2_lstms.dropout_output,
+            self.x3_lstms.dropout_output,
             margin
             )
 
