@@ -339,7 +339,7 @@ def train_fixed_epochs_with_validation(n_epochs, train_model,
         # for i_triplet in xrange(n_train_tripletes):
         for triplet_id, triplet in enumerate(train_triplet_iterator):
             # Calculate training loss for this triplet and update parameters
-            if triplet_id % 100 == 0:
+            if triplet_id % 25 == 0:
                 logger.info(str(datetime.now()) + " triplet_id: %d" % triplet_id)
             train_losses.append(train_model(*triplet))
 
