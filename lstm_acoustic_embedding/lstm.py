@@ -177,7 +177,7 @@ class BatchMultiLayerLSTM(object):
         cur_in = n_in
         self.l2 = 0.
         for layer_id, n_hidden in enumerate(n_hiddens):
-            cur_output_type = output_type if layer_id == self.n_layers-1 else output_type
+            cur_output_type = output_type if layer_id == self.n_layers-1 else "all"
             if cur_parameters is None:
                 W = None
                 U = None
@@ -361,7 +361,7 @@ class MultiLayerLSTM(object):
         cur_in = n_in
         self.l2 = 0.
         for layer_id, n_hidden in enumerate(n_hiddens):
-            cur_output_type = output_type if layer_id == self.n_layers-1 else output_type
+            cur_output_type = output_type if layer_id == self.n_layers-1 else "all"
             if cur_parameters is None:
                 W = None
                 U = None
@@ -909,7 +909,7 @@ def test_multilstm():
     multi_lstm = MultiLayerLSTM(rng, x, n_in, n_hiddens, output_type="last")
     f = theano.function(inputs=[x], outputs=multi_lstm.output)
 
-    n_data = 10
+    n_data = 20
     x0 = rng.randn(n_data, n_in).astype(THEANOTYPE)
     h1 = f(x0)
     W0 = multi_lstm.layers[0].W.get_value()
@@ -926,6 +926,33 @@ def test_multilstm():
     cost = tensor.sum(multi_lstm.output**2)
     loss = theano.function(inputs=[x], outputs=cost)
     gradient = tensor.grad(cost, multi_lstm.parameters)
+
+def test_maxmultilstm():
+    rng = numpy.random.RandomState(0)
+    x = tensor.matrix("x", dtype=THEANOTYPE)
+    n_in = 3
+    n_hiddens = [10, 10]
+    multi_lstm = MultiLayerLSTM(rng, x, n_in, n_hiddens, output_type="max")
+    f = theano.function(inputs=[x], outputs=multi_lstm.output)
+
+    n_data = 20
+    x0 = rng.randn(n_data, n_in).astype(THEANOTYPE)
+    h1 = f(x0)
+    W0 = multi_lstm.layers[0].W.get_value()
+    U0 = multi_lstm.layers[0].U.get_value()
+    b0 = multi_lstm.layers[0].b.get_value()
+    W1 = multi_lstm.layers[1].W.get_value()
+    U1 = multi_lstm.layers[1].U.get_value()
+    b1 = multi_lstm.layers[1].b.get_value()
+    h0_numpy = lstm_numpy(x0, W0, U0, b0)
+    h1_numpy = lstm_numpy(h0_numpy, W1, U1, b1).max(axis=0)
+    numpy.testing.assert_array_almost_equal(h1, h1_numpy)
+
+    # testing the loss
+    cost = tensor.sum(multi_lstm.output**2)
+    loss = theano.function(inputs=[x], outputs=cost)
+    gradient = tensor.grad(cost, multi_lstm.parameters)
+
 
 def test_multibatchlstm():
     rng = numpy.random.RandomState(0)
@@ -1001,6 +1028,7 @@ def test_saveload():
 def main():
     test_lstm()
     test_multilstm()
+    test_maxmultilstm()
     test_saveload()
     test_multibatchlstm()
     
