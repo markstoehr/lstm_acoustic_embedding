@@ -364,7 +364,6 @@ def load_siamese_triplets_lstm(options_dict):
         sequence_output_type = "last"
     model = siamese.SiameseTripletLSTM(
         rng, x1, x2, x3, n_in=39, n_hiddens=options_dict["n_hiddens"], output_type=sequence_output_type)
-
     # Load saved parameters
     logger.info("Reading: " + model_fn)
     f = data_io.smart_open(model_fn)
