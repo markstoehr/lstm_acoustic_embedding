@@ -42,7 +42,7 @@ default_options_dict = {
     "data_dir": "../data/nonpadded_icassp15.0",
     # "data_dir": "data/tmp",
     "n_same_pairs": int(100e3), # if None, all same pairs are used
-    "n_hiddens": [512, 512],
+    "n_hiddens": [256, 256],
     "rnd_seed": 42,
     "batch_size": 100,
     "n_max_epochs": 20,
@@ -58,7 +58,7 @@ default_options_dict = {
     #     "learning_rate": 0.01,
     #     "momentum": 0.9
     #     },
-    "dropout_rates": .7,      # a list of rates for each layer or None
+    "dropout_rates": .4,      # a list of rates for each layer or None
     "sequence_output_type": "max", # use max over the series to get the vector output
     "conv_layer_specs": [       # activation can be "sigmoid", "tanh", "relu", "linear"
         {"filter_shape": (96, 1, 39, 9), "pool_shape": (1, 3), "activation": "relu"},
@@ -247,6 +247,7 @@ def train_siamese_triplets_lstm(options_dict):
     if options_dict["l2_weight"] > 0.:
         loss = loss  + options_dict["l2_weight"]* model.l2
 
+
     # Compile test functions
     same_distance = model.cos_same()  # track the distances of same and different pairs separately
     diff_distance = model.cos_diff()
@@ -279,6 +280,7 @@ def train_siamese_triplets_lstm(options_dict):
             },
         mode=theano_mode,
         )
+
     # test_model = theano.function(
     #     inputs=[x1_indices, x2_indices, x3_indices],
     #     outputs=outputs,
@@ -310,6 +312,7 @@ def train_siamese_triplets_lstm(options_dict):
             )
     else:
         assert False, "Invalid learning rule: " + learning_rule["type"]
+
 
     # Compile training function
     train_model = theano.function(
@@ -346,6 +349,7 @@ def train_siamese_triplets_lstm(options_dict):
 
 
     # Train model
+
 
     logger.info("Training Siamese triplets CNN")
     record_dict_fn = path.join(options_dict["model_dir"], "record_dict.pkl.gz")
