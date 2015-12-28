@@ -1,3 +1,11 @@
+# December 28, 2015
+
+Ensuring that I can the convolutional LSTM
+
+```bash
+python train_siamese_triplets_convlstm.py ../models/siamese_triplets_convlstm.1
+```
+
 # December 27, 2015
 
 Made changes to the `lstm.py` file so that it now properly sets the output layer for multilayer lstms.
