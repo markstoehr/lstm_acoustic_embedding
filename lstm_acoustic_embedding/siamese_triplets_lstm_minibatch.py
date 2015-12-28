@@ -58,7 +58,7 @@ default_options_dict = {
     #     "learning_rate": 0.01,
     #     "momentum": 0.9
     #     },
-    "dropout_rates": .3,      # a list of rates for each layer or None
+    "dropout_rates": None,      # a list of rates for each layer or None
     "sequence_output_type": "max", # use max over the series to get the vector output
     "conv_layer_specs": [       # activation can be "sigmoid", "tanh", "relu", "linear"
         {"filter_shape": (96, 1, 39, 9), "pool_shape": (1, 3), "activation": "relu"},
