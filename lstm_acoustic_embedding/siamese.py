@@ -123,6 +123,117 @@ class SiameseTripletBatchLSTMNN(object):
         """Load the model parameters from the opened pickle file `f`."""
         self.model.load(f)
 
+class SiameseTripletBatchConvLSTM(object):
+    """
+    Siamese triplet convolutional neural network, allowing for hinge losses.
+
+    An example use of this network is to train a metric on triplets A, B, X.
+    Assume A-X is a same pair and B-X a different pair. Then a cost can be
+    defined such that dist(A, X) > dist(B, X) by some margin. By convention the
+    same-pair is taken as `x1_layers` and `x2_layers`, while the different pair
+    is taken as `x1_layers` and `x3_layers`.
+
+    Attributes
+    ----------
+    x1_layers : list of ConvMaxPoolLayer and HiddenLayer
+        Attributes are similar to `SiameseCNN`, except that now there are
+        three tied networks, and so there is `x1_layers`, `x2_layers` and
+        `x3_layers`, with corresponding additional layers when using dropout.
+    """
+
+    def __init__(self, rng, input_x1, input_x2, input_x3, input_m1, input_m2, input_m3, input_shape, filter_shape, n_lstm_hiddens, prefix="triplet_convlstm", output_type="max", truncate_gradient=-1, srng=None, dropout=0.0):
+        """
+        Initialize symbolic parameters and expressions.
+
+        Many of the parameters are identical to that of `cnn.build_cnn_layers`.
+        Some of the other parameters are described below.
+
+        Parameters
+        ----------
+        input_x1 : symbolic matrix
+            The matrix is reshaped according to `input_shape` and then treated
+            as the input of the first side of the Siamese network.
+        input_x2 : symbolic matrix
+            The matrix is reshaped according to `input_shape` and then treated
+            as the input of the second side of the Siamese network, forming a
+            same-pair with `input_x1`.
+        input_x3 : symbolic matrix
+            The matrix is reshaped according to `input_shape` and then treated
+            as the input of the third side of the Siamese network, forming a
+            different-pair with `input_x1`.
+        """
+
+        # Build common layers to which the Siamese layers are tied
+        input = T.tensor3("x", dtype=THEANOTYPE)
+        mask = T.matrix("m", dtype=THEANOTYPE)
+        self.input = input
+        self.mask = mask
+        self.output_type = output_type
+        self.input_shape = inputs_shape
+        self.filter_shape = filter_shape
+        self.n_lstm_hiddens = n_lstm_hiddens
+        self.prefix = prefix
+        self.srng = srng
+        self.dropout = dropout
+        self.truncate_gradient = truncate_gradient
+        self.model = lstm.BatchMultiLayerConvLSTM(
+            rng, input, mask, input_shape, filter_shape, n_lstm_hiddens,
+            output_type=self.output_type, prefix=self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout)
+        self.n_layers = len(self.model.layers)
+        
+        self.x1_model = lstm.BatchMultiLayerConvLSTM(
+            rng, input_x1, input_m1, input_shape, filter_shape, n_lstm_hiddens,
+            output_type=self.output_type, prefix="%s_lstm1" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout)
+        self.x2_model = lstm.BatchMultiLayerConvLSTM(
+            rng, input_x1, input_m1, input_shape, filter_shape, n_lstm_hiddens,
+            output_type=self.output_type, prefix="%s_lstm2" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout)
+        self.x3_model = lstm.BatchMultiLayerConvLSTM(
+            rng, input_x1, input_m1, input_shape, filter_shape, n_lstm_hiddens,
+            output_type=self.output_type, prefix="%s_lstm3" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout)
+
+        self.parameters = self.model.parameters
+        self.l2 = self.model.l2
+        self.output = self.model.output
+
+    def loss_hinge_cos(self, margin=0.5):
+        return _loss_hinge_cos(
+            self.x1_model.output,
+            self.x2_model.output,
+            self.x3_model.output,
+            margin
+            )
+
+    def dropout_loss_hinge_cos(self, margin=0.5):
+        return _loss_hinge_cos(
+            self.x1_lstms.dropout_output,
+            self.x2_lstms.dropout_output,
+            self.x3_lstms.dropout_output,
+            margin
+            )
+
+    
+    def cos_same(self):
+        """
+        Return symbolic expression for the mean cosine distance of the same
+        pairs alone.
+        """
+        return T.mean(cos_distance(self.x1_model.output, self.x2_model.output))
+
+    def cos_diff(self):
+        """
+        Return symbolic expression for the mean cosine distance of the
+        different pairs alone.
+        """
+        return T.mean(cos_distance(self.x1_model.output, self.x3_model.output))
+
+    def save(self, f):
+        """Pickle the model parameters to opened file `f`."""
+        self.model.save(f)
+
+    def load(self, f):
+        """Load the model parameters from the opened pickle file `f`."""
+        self.model.load(f)
+
 class SiameseTripletLSTMNN(object):
     """
     Siamese triplet convolutional neural network, allowing for hinge losses.
