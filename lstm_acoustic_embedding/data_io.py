@@ -262,7 +262,7 @@ def load_swbd_same_diff(rng, data_dir):
 
     return datasets
 
-def load_swbd_same_diff_mask(rng, data_dir):
+def load_swbd_same_diff_mask(rng, data_dir, filter_length=None):
 
     logger.info("Loading same and different pairs: " + data_dir)
 
@@ -286,7 +286,12 @@ def load_swbd_same_diff_mask(rng, data_dir):
         for j, i in enumerate(utt_ids):
             xs[j][:ls[j]] = npz[i]
             mask[j][:ls[j]] = 1.0
-            
+
+        # perform adjustment for convlstms, since we perform a convolution
+        # first over the time series
+        if filter_length is not None:
+            ls -= filter_length - 1
+
 
         # Get labels for each utterance
         labels = swbd_utts_to_labels(utt_ids)
