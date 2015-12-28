@@ -201,7 +201,7 @@ class BatchMultiLayerLSTM(object):
             self.l2 += self.layers[-1].l2
             cur_in = n_hidden
         self.output = self.layers[-1].output
-        if srng is not None and dropout > 0.0:
+        if srng is not None and dropout is not None and dropout > 0.0:
             self.dropout_output = theano_utils.apply_dropout(
                 srng, self.output, p=dropout)
 
@@ -386,7 +386,7 @@ class MultiLayerLSTM(object):
 
         
         self.output = self.layers[-1].output
-        if srng is not None and dropout > 0.0:
+        if srng is not None and dropout is not None and dropout > 0.0:
             self.dropout_output = theano_utils.apply_dropout(
                 srng, self.output, p=dropout)
         

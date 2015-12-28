@@ -11,6 +11,17 @@ python eval_samediff.py ../models/siamese_triplets_lstm_max_dropout.2/swbd.dev.l
 "sequence_output_type": "max"
 
 
+## without dropout
+
+```bash
+python siamese_triplets_lstm_minibatch.py ../models/siamese_triplets_lstm_max.1
+python apply_layers.py ../models/siamese_triplets_lstm_max.1 dev
+python eval_samediff.py ../models/siamese_triplets_lstm_max.1/swbd.dev.layer_-1.npz 
+```
+"dropout": None
+"sequence_output_type": "max"
+
+
 # December 26, 2015
 
 ### This code will not work work anymore because I had a mistake
