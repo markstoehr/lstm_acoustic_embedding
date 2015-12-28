@@ -169,7 +169,7 @@ class SiameseTripletBatchConvLSTM(object):
         self.input = input
         self.mask = mask
         self.output_type = output_type
-        self.input_shape = inputs_shape
+        self.input_shape = input_shape
         self.filter_shape = filter_shape
         self.n_lstm_hiddens = n_lstm_hiddens
         self.prefix = prefix
@@ -179,16 +179,16 @@ class SiameseTripletBatchConvLSTM(object):
         self.model = lstm.BatchMultiLayerConvLSTM(
             rng, input, mask, input_shape, filter_shape, n_lstm_hiddens,
             output_type=self.output_type, prefix=self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout)
-        self.n_layers = len(self.model.layers)
+
         
         self.x1_model = lstm.BatchMultiLayerConvLSTM(
             rng, input_x1, input_m1, input_shape, filter_shape, n_lstm_hiddens,
             output_type=self.output_type, prefix="%s_lstm1" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout)
         self.x2_model = lstm.BatchMultiLayerConvLSTM(
-            rng, input_x1, input_m1, input_shape, filter_shape, n_lstm_hiddens,
+            rng, input_x2, input_m2, input_shape, filter_shape, n_lstm_hiddens,
             output_type=self.output_type, prefix="%s_lstm2" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout)
         self.x3_model = lstm.BatchMultiLayerConvLSTM(
-            rng, input_x1, input_m1, input_shape, filter_shape, n_lstm_hiddens,
+            rng, input_x3, input_m3, input_shape, filter_shape, n_lstm_hiddens,
             output_type=self.output_type, prefix="%s_lstm3" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout)
 
         self.parameters = self.model.parameters
@@ -205,9 +205,9 @@ class SiameseTripletBatchConvLSTM(object):
 
     def dropout_loss_hinge_cos(self, margin=0.5):
         return _loss_hinge_cos(
-            self.x1_lstms.dropout_output,
-            self.x2_lstms.dropout_output,
-            self.x3_lstms.dropout_output,
+            self.x1_model.dropout_output,
+            self.x2_model.dropout_output,
+            self.x3_model.dropout_output,
             margin
             )
 
