@@ -513,7 +513,74 @@ class MultiLayerLSTMMLP(object):
     def load(self, f):
         for layer in self.layers:
             layer.load(f)
-                                    
+
+class BatchMultiLayerConvLSTM(object):
+    """
+    Convolutional Long short term memory network.
+    Attributes:
+    """
+    def __init__(self, rng, input, mask, input_shape, filter_shape,
+                 n_hiddens, V=None, parameters=None, U=None, b=None,
+                 output_type="last", prefix="convlstms", truncate_gradient=-1, srng=None, dropout=0.0):
+        """
+        initialization for hidden is just done at the zero level
+
+        Parameters:
+        -----------
+        V:
+           Convolutional layer
+        """
+        self.truncate_gradient = truncate_gradient
+        self.output_type = output_type
+        self.dropout = dropout
+        self.srng = srng
+        self.input = input
+        self.mask
+        self.input_shape
+        self.filter_shape
+        self.n_in = filter_shape[0]
+        self.n_hiddens = n_hiddens
+        self.prefix = prefix
+        
+        if V is None:
+            n_units_in = numpy.prod(filter_shape[1:])
+            n_units_out = numpy.prod(filter_shape[0] * numpy.prod(filter_shape[2:]))
+            V_values = numpy.asarray(rng.uniform(
+                low=-np.sqrt(6. / (n_units_in + n_units_out)),
+                high=np.sqrt(6. / (n_units_in + n_units_out)),
+                size=filter_shape), dtype=theano.config.floatX)
+            V = theano.shared(value=V_values.astype(THEANOTYPE),
+                              name="%s_V" % self.prefix,
+                              borrow=True)
+
+        self.V = V
+        self.conv_out = nnet.conv.conv2d(
+            input=self.input,
+            filters=self.V,
+            filter_shape=self.filter_shape,
+            image_shape=self.input_shape
+            ).swapaxes(1, 2).swapaxes(0, 1)
+        self.lstms = BatchMultiLayerLSTM(
+            rng, self.conv_out, self.mask, self.n_in, self.n_hiddens,
+            parameters=parameters, output_type=self.output_type,
+            prefix="%s_lstms" % self.prefix, truncate_gradient=self.truncate_gradient,
+            srng=self.srng, dropout=self.dropout)
+        self.parameters = [self.V] + self.lstms.parameters
+        self.l2 = self.lstms.l2 + (self.V**2).sum()
+        self.output = self.lstms.output    
+
+
+    def save(self, f):
+        """Pickle the model parameters to opened file `f`."""
+        pickle.dump(self.V.get_value(borrow=True), f, -1)
+        self.lstms.save(f)
+
+    def load(self, f):
+        """Load the model parameters from the opened pickle file `f`."""
+        self.V.set_value(pickle.load(f), borrow=True)
+        self.lstms.load(f)
+
+            
 class LSTM(object):
     """
     Long short term memory network.
