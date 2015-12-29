@@ -204,6 +204,8 @@ class BatchMultiLayerLSTM(object):
         if srng is not None and dropout is not None and dropout > 0.0:
             self.dropout_output = theano_utils.apply_dropout(
                 srng, self.output, p=dropout)
+        else:
+            self.dropout_output = self.output
 
 
     def save(self, f):
@@ -389,6 +391,8 @@ class MultiLayerLSTM(object):
         if srng is not None and dropout is not None and dropout > 0.0:
             self.dropout_output = theano_utils.apply_dropout(
                 srng, self.output, p=dropout)
+        else:
+            self.dropout_output = self.output
         
 
     def save(self, f):
@@ -561,7 +565,7 @@ class BatchMultiLayerConvLSTM(object):
             image_shape=self.input_shape
             )[:, :, :, 0].swapaxes(1, 2).swapaxes(0, 1)
         self.lstms = BatchMultiLayerLSTM(
-            rng, self.conv_out, self.mask, self.n_in, self.n_hiddens,
+            rng, self.conv_out, self.mask[:self.conv_out.shape[0]], self.n_in, self.n_hiddens,
             parameters=parameters, output_type=self.output_type,
             prefix="%s_lstms" % self.prefix, truncate_gradient=self.truncate_gradient,
             srng=self.srng, dropout=self.dropout)
@@ -1045,6 +1049,60 @@ def test_multibatchlstm():
     hs1 = fs(xs_arr0, mask)
     numpy.testing.assert_array_almost_equal(hs0, hs1)
 
+def test_multibatchconvlstm():
+    rng = numpy.random.RandomState(0)
+    x = tensor.tensor3("x", dtype=THEANOTYPE)
+    m = tensor.matrix("m", dtype=THEANOTYPE)
+    filter_shape = (96, 1, 9, 39)
+    n_units_in = numpy.prod(filter_shape[1:])
+    n_units_out = numpy.prod(filter_shape[0] * numpy.prod(filter_shape[2:]))
+    n_data = 200
+    sequence_lengths = [5, 10, 15, n_data]
+    batch_size = len(sequence_lengths)
+    input_shape = (batch_size, 1, n_data, 39)
+    n_hiddens = [10, 10]
+    multi_lstm = BatchMultiLayerConvLSTM(
+        rng, x, m, input_shape, filter_shape, n_hiddens)
+
+    xs0 = [rng.randn(n_data, 39).astype(THEANOTYPE)
+           for n_data in sequence_lengths]
+    xs_arr0, mask = batchify(xs0)
+    xs_arr0 = xs_arr0.swapaxes(0, 1)
+    n_units_in = numpy.prod(filter_shape[1:])
+    n_units_out = numpy.prod(filter_shape[0] * numpy.prod(filter_shape[2:]))
+    V_values = numpy.asarray(rng.uniform(
+                low=-numpy.sqrt(6. / (n_units_in + n_units_out)),
+                high=numpy.sqrt(6. / (n_units_in + n_units_out)),
+                size=filter_shape), dtype=theano.config.floatX)
+    V = theano.shared(value=V_values.astype(THEANOTYPE), name="V", borrow=True)
+
+    conv_out = nnet.conv.conv2d(
+        input=x.reshape(input_shape),
+        filters=V,
+        filter_shape=filter_shape,
+        image_shape=input_shape
+    )[:, :, :, 0].swapaxes(1, 2).swapaxes(0, 1)
+
+    # lstms = BatchMultiLayerLSTM(
+    #     rng, conv_out, m, self.n_in, self.n_hiddens,
+    #     parameters=parameters, output_type=self.output_type,
+    #     prefix="%s_lstms" % self.prefix, truncate_gradient=self.truncate_gradient,
+    #         srng=self.srng, dropout=self.dropout)
+    
+    f0 = theano.function(inputs=[x], outputs=x.reshape(input_shape))
+    f = theano.function(inputs=[x], outputs=conv_out)
+    fs = theano.function(inputs=[x, m], outputs=multi_lstm.output)
+    import pdb; pdb.set_trace()
+    xs = tensor.tensor3("xs", dtype=THEANOTYPE)
+    mask = tensor.matrix("mask", dtype=THEANOTYPE)
+
+    multi_batchlstm = BatchMultiLayerLSTM(rng, xs, mask, n_in, n_hiddens, parameters=multi_lstm.parameters, output_type="last")
+    fs = theano.function(inputs=[x, m], outputs=multi_batchlstm.output)
+    
+    
+    hs1 = fs(xs_arr0, mask)
+    numpy.testing.assert_array_almost_equal(hs0, hs1)
+
 def test_multisaveload():
     rng = numpy.random.RandomState(0)
     x = tensor.matrix("x", dtype=THEANOTYPE)
@@ -1098,6 +1156,7 @@ def main():
     test_multilstm()
     test_maxmultilstm()
     test_saveload()
+    test_multibatchconvlstm()
     test_multibatchlstm()
     
 if __name__ == "__main__":
