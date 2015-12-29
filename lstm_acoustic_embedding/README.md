@@ -1,10 +1,24 @@
+# December 29, 2015
+
+# testing things on MLPs
+
 # December 28, 2015
 
 Ensuring that I can the convolutional LSTM
 
 ```bash
-python train_siamese_triplets_convlstm.py ../models/siamese_triplets_convlstm.1
+python train_siamese_triplets_convlstm.py ../models/siamese_triplets_convlstm.1	
 ```
+
+```bash
+python siamese_triplets_lstm_minibatch.py ../models/siamese_triplets_lstm_last.1
+python apply_layers.py ../models/siamese_triplets_lstm_last.1 dev
+python eval_samediff.py ../models/siamese_triplets_lstm_last.1/swbd.dev.layer_-1.npz 
+```
+"dropout": .3
+"sequence_output_type": "max"
+
+
 
 # December 27, 2015
 
