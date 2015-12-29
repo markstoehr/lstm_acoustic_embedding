@@ -178,17 +178,16 @@ class SiameseTripletBatchConvLSTM(object):
         self.truncate_gradient = truncate_gradient
         self.model = lstm.BatchMultiLayerConvLSTM(
             rng, input, mask, input_shape, filter_shape, n_lstm_hiddens,
-            output_type=self.output_type, prefix=self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout)
+            output_type=self.output_type, prefix="%s_lstm" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout)
 
-        
         self.x1_model = lstm.BatchMultiLayerConvLSTM(
-            rng, input_x1, input_m1, input_shape, filter_shape, n_lstm_hiddens, V=self.model.V, parameters=self.model.parameters,
+            rng, input_x1, input_m1, input_shape, filter_shape, n_lstm_hiddens, V=self.model.V, parameters=self.model.parameters[1:],
             output_type=self.output_type, prefix="%s_lstm1" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout)
         self.x2_model = lstm.BatchMultiLayerConvLSTM(
-            rng, input_x2, input_m2, input_shape, filter_shape, n_lstm_hiddens, V=self.model.V, parameters=self.model.parameters,
+            rng, input_x2, input_m2, input_shape, filter_shape, n_lstm_hiddens, V=self.model.V, parameters=self.model.parameters[1:],
             output_type=self.output_type, prefix="%s_lstm2" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout)
         self.x3_model = lstm.BatchMultiLayerConvLSTM(
-            rng, input_x3, input_m3, input_shape, filter_shape, n_lstm_hiddens, V=self.model.V, parameters=self.model.parameters,
+            rng, input_x3, input_m3, input_shape, filter_shape, n_lstm_hiddens, V=self.model.V, parameters=self.model.parameters[1:],
             output_type=self.output_type, prefix="%s_lstm3" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout)
 
         self.parameters = self.model.parameters
