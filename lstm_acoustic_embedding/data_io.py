@@ -262,7 +262,7 @@ def load_swbd_same_diff(rng, data_dir):
 
     return datasets
 
-def load_swbd_same_diff_mask(rng, data_dir, filter_length=None):
+def load_swbd_same_diff_mask(rng, data_dir, filter_length=None, seq_length=200):
 
     logger.info("Loading same and different pairs: " + data_dir)
 
@@ -279,7 +279,7 @@ def load_swbd_same_diff_mask(rng, data_dir, filter_length=None):
         rng.shuffle(utt_ids)
         
         ls = np.asarray([len(npz[i]) for i in utt_ids], dtype=np.int32)
-        max_length = ls.max()
+        max_length = ls.max() if seq_length is None else seq_length
         xs = np.zeros((len(ls), max_length, npz[utt_ids[0]].shape[1]),
                       dtype=THEANOTYPE)
         mask = np.zeros((len(ls), max_length), dtype=THEANOTYPE)
