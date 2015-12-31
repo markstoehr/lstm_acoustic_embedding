@@ -219,72 +219,89 @@ class BatchMultiLayerLSTM(object):
             layer.load(f)
 
 
-class BatchBiLSTM(object):
-    """
-    LSTM with two directions.
-    """
-    def __init__(self, rng, input, mask, n_in, n_hiddens, parameters=None,
-                 output_type="last", prefix="lstms", truncate_gradient=-1,
-                 srng=None, dropout=0.0):
-        self.output_type = output_type
-        self.dropout = dropout
-        self.truncate_gradient = truncate_gradient
-        self.n_layers = len(n_hiddens)
-        self.layers = []
-        self.input = input
-        self.mask = mask
-        self.n_in = n_in
-        self.prefix = prefix
-        # reverse and copy because we want to pop off the parameters
-        if parameters is not None:
-            cur_parameters = list(parameters)[::-1]
-        else:
-            cur_parameters = None
+# class BatchBiLSTM(object):
+#     """
+#     LSTM with two directions.
+#     """
+#     def __init__(self, rng, input, mask, n_in, n_hiddens, parameters=None,
+#                  output_type="last", prefix="lstms", truncate_gradient=-1,
+#                  srng=None, dropout=0.0):
+#         """
+#         Parameters:
+#         -----------
+#         parameters: list of tensor shared variables
+        
+#         """
+#         self.output_type = output_type
+#         self.dropout = dropout
+#         self.truncate_gradient = truncate_gradient
+#         self.n_layers = len(n_hiddens)
+#         self.layers = []
+#         self.input = input
+#         self.mask = mask
+#         self.n_in = n_in
+#         self.prefix = prefix
+#         # reverse and copy because we want to pop off the parameters
+#         if parameters is not None:
+#             cur_parameters = list(parameters)[::-1]
+#         else:
+#             cur_parameters = None
             
-        self.parameters = []
-        cur_in = n_in
-        self.l2 = 0.
-        for layer_id, n_hidden in enumerate(n_hiddens):
-            cur_output_type = output_type if layer_id == self.n_layers-1 else "all"
-            if cur_parameters is None:
-                W = None
-                U = None
-                b = None
-            else:
-                W = cur_parameters.pop()
-                U = cur_parameters.pop()
-                b = cur_parameters.pop()
+#         self.parameters = []
+#         cur_in = n_in
+#         self.l2 = 0.
 
-            if self.layers:
-                input = self.layers[-1].output
+#         if cur_parameters is None:
+#             W = None
+#             U = None
+#             b = None
+#         else:
+#             W = cur_parameters.pop()
+#             U = cur_parameters.pop()
+#             b = cur_parameters.pop()
+
+#         self.lower_lstm = BatchLSTM(
+#             rng, input, mask, cur_in, n_hidden, W=W, U=U, b=b,
+#             output_type=cur_output_type,
+#             prefix="%s_%d" % (self.prefix, layer_id),
+#             truncate_gradient=self.truncate_gradient)
+
+#         self.parameters.append(self.lower_lstm.W)
+#         self.parameters.append(self.lower_lstm.U)
+#         self.parameters.append(self.lower_lstm.b)
+
+            
+        
+#         for layer_id, n_hidden in enumerate(n_hiddens):
+#             cur_output_type = output_type if layer_id == self.n_layers-1 else "all"
+
+#             if self.layers:
+#                 input = self.layers[-1].output
                 
-            self.layers.append(
-                BatchLSTM(rng, input, mask, cur_in, n_hidden, W=W, U=U, b=b,
-                          output_type=cur_output_type,
-                          prefix="%s_%d" % (self.prefix, layer_id),
-                     truncate_gradient=self.truncate_gradient))
-            self.parameters.append(self.layers[-1].W)
-            self.parameters.append(self.layers[-1].U)
-            self.parameters.append(self.layers[-1].b)
-            self.l2 += self.layers[-1].l2
-            cur_in = n_hidden
-        self.output = self.layers[-1].output
-        if srng is not None and dropout is not None and dropout > 0.0:
-            self.dropout_output = theano_utils.apply_dropout(
-                srng, self.output, p=dropout)
-        else:
-            self.dropout_output = self.output
+#             self.layers.append(
+#                 )
+#             self.parameters.append(self.layers[-1].W)
+#             self.parameters.append(self.layers[-1].U)
+#             self.parameters.append(self.layers[-1].b)
+#             self.l2 += self.layers[-1].l2
+#             cur_in = n_hidden
+#         self.output = self.layers[-1].output
+#         if srng is not None and dropout is not None and dropout > 0.0:
+#             self.dropout_output = theano_utils.apply_dropout(
+#                 srng, self.output, p=dropout)
+#         else:
+#             self.dropout_output = self.output
 
 
-    def save(self, f):
-        """Pickle the model parameters to opened file `f`."""
-        for layer in self.layers:
-            layer.save(f)
+#     def save(self, f):
+#         """Pickle the model parameters to opened file `f`."""
+#         for layer in self.layers:
+#             layer.save(f)
 
-    def load(self, f):
-        """Load the model parameters from the opened pickle file `f`."""
-        for layer in self.layers:
-            layer.load(f)
+#     def load(self, f):
+#         """Load the model parameters from the opened pickle file `f`."""
+#         for layer in self.layers:
+#             layer.load(f)
 
 
 def BatchMultiLayerLSTMFactory(rng, n_in, n_hiddens, parameters=None,
