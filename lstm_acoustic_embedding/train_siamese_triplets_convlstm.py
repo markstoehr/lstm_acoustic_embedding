@@ -233,7 +233,7 @@ def train_siamese_triplets_lstm(options_dict):
 
     
     # Build model
-    input_shape = (options_dict["batch_size"], 1, 39, 200)
+    input_shape = (options_dict["batch_size"], 1, 200, 39)
     model = siamese.SiameseTripletBatchConvLSTM(
         rng, x1, x2, x3, m1, m2, m3, input_shape,
         filter_shape=options_dict["filter_shape"],
@@ -261,29 +261,33 @@ def train_siamese_triplets_lstm(options_dict):
     diff_distance = model.cos_diff()
     outputs = [error, loss, same_distance, diff_distance]
     theano_mode = theano.Mode(linker="cvm")
-    
+
+    # 
     validate_model = theano.function(
         inputs=[x1_indices, x2_indices, x3_indices],
         outputs=outputs,
         givens={
-            x1: dev_x[x1_indices].swapaxes(0, 1),
+            x1: dev_x[x1_indices],
             m1: dev_mask[x1_indices].T,
-            x2: dev_x[x2_indices].swapaxes(0, 1),
+            x2: dev_x[x2_indices],
             m2: dev_mask[x2_indices].T,
-            x3: dev_x[x3_indices].swapaxes(0, 1),
+            x3: dev_x[x3_indices],
             m3: dev_mask[x3_indices].T,
             },
         mode=theano_mode,
         )
+
+
+    triplet = validate_triplet_iterator.__iter__().next()
     test_model = theano.function(
         inputs=[x1_indices, x2_indices, x3_indices],
         outputs=outputs,
         givens={
-            x1: test_x[x1_indices].swapaxes(0, 1),
+            x1: test_x[x1_indices],
             m1: test_mask[x1_indices].T,
-            x2: test_x[x2_indices].swapaxes(0, 1),
+            x2: test_x[x2_indices],
             m2: test_mask[x2_indices].T,
-            x3: test_x[x3_indices].swapaxes(0, 1),
+            x3: test_x[x3_indices],
             m3: test_mask[x3_indices].T,
             },
         mode=theano_mode,
@@ -328,11 +332,11 @@ def train_siamese_triplets_lstm(options_dict):
         outputs=outputs,
         updates=updates,
         givens={
-            x1: train_x[x1_indices].swapaxes(0, 1),
+            x1: train_x[x1_indices],
             m1: train_mask[x1_indices].T,
-            x2: train_x[x2_indices].swapaxes(0, 1),
+            x2: train_x[x2_indices],
             m2: train_mask[x2_indices].T,
-            x3: train_x[x3_indices].swapaxes(0, 1),
+            x3: train_x[x3_indices],
             m3: train_mask[x3_indices].T,
             },
         mode=theano_mode,
