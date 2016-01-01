@@ -18,6 +18,7 @@ import logging
 import numpy as np
 import os
 import scipy.spatial.distance as distance
+import shutil
 import sys
 import theano
 from theano import tensor
@@ -412,7 +413,7 @@ def check_argv():
     return parser.parse_args()
 
 
-def load_siamese_triplets_lstm_minibatch(options_dict):
+def load_siamese_triplets_convlstm_minibatch(options_dict):
 
     model_fn = path.join(options_dict["model_dir"], "model.pkl.gz")
 
@@ -426,10 +427,19 @@ def load_siamese_triplets_lstm_minibatch(options_dict):
 
     # Random number generators
     rng = np.random.RandomState(options_dict["rnd_seed"])
+    if options_dict["dropout_rates"] is not None:
+        srng = RandomStreams(seed=options_dict["rnd_seed"])
+    else:
+        srng = None
 
     # Build model
-    model = siamese.SiameseTripleBatchLSTM(
-        rng, x1, x2, x3, m1, m2, m3, n_in=39, n_hiddens=options_dict["n_hiddens"], output_type=options_dict["sequence_output_type"])
+    input_shape = (options_dict["batch_size"], 1, 200, 39)
+    model = siamese.SiameseTripletBatchConvLSTM(
+        rng, x1, x2, x3, m1, m2, m3, input_shape,
+        filter_shape=options_dict["filter_shape"],
+        n_lstm_hiddens=options_dict["n_hiddens"],
+        output_type=options_dict["sequence_output_type"],
+        srng=srng, dropout=options_dict["dropout_rates"])
 
     # Load saved parameters
     logger.info("Reading: " + model_fn)
@@ -440,11 +450,78 @@ def load_siamese_triplets_lstm_minibatch(options_dict):
     return model
 
 
+def test_siamese_triplet_batch_save_load():
+    testdir = "train_siamese_triplets_convlstm_tmp_testdir"
+    options_dict = default_options_dict.copy()
+    rng = np.random.RandomState(options_dict["rnd_seed"])
+    if options_dict["dropout_rates"] is not None:
+        srng = RandomStreams(seed=options_dict["rnd_seed"])
+    else:
+        srng = None
+
+    if not path.isdir(testdir):
+        os.makedirs(testdir)
+    model_fn = path.join(testdir, "model.pkl.gz")
+
+    # Symbolic variables
+    x1 = tensor.matrix("x1", dtype=THEANOTYPE)
+    x2 = tensor.matrix("x2", dtype=THEANOTYPE)
+    x3 = tensor.matrix("x3", dtype=THEANOTYPE)
+    m1 = tensor.matrix("m1", dtype=THEANOTYPE)
+    m2 = tensor.matrix("m2", dtype=THEANOTYPE)
+    m3 = tensor.matrix("m3", dtype=THEANOTYPE)
+
+    # Random number generators
+    rng = np.random.RandomState(options_dict["rnd_seed"])
+
+    # Build model
+    input_shape = (options_dict["batch_size"], 1, 200, 39)
+    model = siamese.SiameseTripletBatchConvLSTM(
+        rng, x1, x2, x3, m1, m2, m3, input_shape,
+        filter_shape=options_dict["filter_shape"],
+        n_lstm_hiddens=options_dict["n_hiddens"],
+        output_type=options_dict["sequence_output_type"],
+        srng=srng, dropout=options_dict["dropout_rates"])
+
+    run_model = theano.function(
+        inputs=[model.input, model.mask],
+        outputs=model.output)
+
+    x0 = rng.randn(options_dict["batch_size"], 200, 39)
+    m0 = rng.rand(options_dict["batch_size"], 200).T
+
+    y0 = run_model(x0, m0)
+
+    f = data_io.smart_open(model_fn, "wb")
+    model.save(f)
+    f.close()
+
+    model = siamese.SiameseTripletBatchConvLSTM(
+        rng, x1, x2, x3, m1, m2, m3, input_shape,
+        filter_shape=options_dict["filter_shape"],
+        n_lstm_hiddens=options_dict["n_hiddens"],
+        output_type=options_dict["sequence_output_type"],
+        srng=srng, dropout=options_dict["dropout_rates"])
+
+    f = data_io.smart_open(model_fn, "rb")
+    model.load(f)
+    f.close()
+
+    run_model = theano.function(
+        inputs=[model.input, model.mask],
+        outputs=model.output)
+
+    y1 = run_model(x0, m0)
+    
+    shutil.rmtree(testdir)
+    np.testing.assert_array_almost_equal(y1, y0)
+
 #-----------------------------------------------------------------------------#
 #                                MAIN FUNCTION                                #
 #-----------------------------------------------------------------------------#
 
 def main():
+    
     args = check_argv()
 
     # logging.basicConfig(level=logging.DEBUG)
@@ -453,6 +530,10 @@ def main():
     options_dict = default_options_dict.copy()
     options_dict["model_dir"] = args.model_dir
 
+    if args.model_dir == "test":
+        test_siamese_triplet_batch_save_load()
+        return
+    
     # Train and save the model and options
     train_siamese_triplets_lstm(options_dict)
 
