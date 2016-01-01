@@ -330,7 +330,7 @@ def train_fixed_epochs_with_validation(n_epochs, train_model,
                 save_model_func(f)
                 f.close()
 
-    for i_epoch in xrange(n_epochs):
+    for i_epoch in xrange(1): # xrange(n_epochs):
 
         # Loop over training tripletes
         train_losses = []
@@ -342,9 +342,12 @@ def train_fixed_epochs_with_validation(n_epochs, train_model,
             if triplet_id % 25 == 0:
                 logger.info(str(datetime.now()) + " triplet_id: %d" % triplet_id)
             train_losses.append(train_model(*triplet))
+            break
 
         # Validate the model
-        validation_losses = [validate_model(*triplet) for triplet in validate_triplet_iterator]
+        # validation_losses = [validate_model(*triplet) for triplet in validate_triplet_iterator]
+        triplet = validate_triplet_iterator
+        validation_losses = validate_model(*triplet)
         validation_loss = np.mean(validation_losses, axis=0)
         logger.info("Epoch " + str(i_epoch + 1) + ": "
             "validation loss: " + str(validation_loss)
@@ -363,7 +366,7 @@ def train_fixed_epochs_with_validation(n_epochs, train_model,
             best_validation_loss0 = validation_loss0
             i_epoch_best = i_epoch
             # Test model
-            if test_model is not None:
+            if test_model is not None and 0 > 1:
                 test_losses = [test_model(*triplet) for triplet in test_triplet_iterator]
                 test_loss = np.mean(test_losses, axis=0)
                 logger.info("    Test loss: " + str(test_loss))
