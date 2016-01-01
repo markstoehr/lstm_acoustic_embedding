@@ -7,7 +7,8 @@
 Ensuring that I can the convolutional LSTM
 
 ```bash
-python train_siamese_triplets_convlstm.py ../models/siamese_triplets_convlstm.1	
+python train_siamese_triplets_convlstm.py ../models/siamese_triplets_convlstm.1
+python apply_layers.py ../models/siamese_triplets_convlstm.1 dev
 ```
 
 ```bash
