@@ -43,7 +43,7 @@ default_options_dict = {
     "data_dir": "../data/nonpadded_icassp15.0",
     # "data_dir": "data/tmp",
     "n_same_pairs": int(100e3), # if None, all same pairs are used
-    "n_hiddens": [256, 256],
+    "n_hiddens": [512, 512],
     "rnd_seed": 42,
     "batch_size": 100,
     "n_max_epochs": 20,
@@ -62,7 +62,7 @@ default_options_dict = {
     "dropout_rates": None,      # a list of rates for each layer or None
     "sequence_output_type": "last", # use max over the series to get the vector output
     "filter_shape" : (96, 1, 9, 39),
-    
+    "embedding_dim" : None,
     "conv_layer_specs": [       # activation can be "sigmoid", "tanh", "relu", "linear"
         {"filter_shape": (96, 1, 39, 9), "pool_shape": (1, 3), "activation": "relu"},
         {"filter_shape": (96, 96, 1, 8), "pool_shape": (1, 3), "activation": "relu"},
@@ -239,6 +239,7 @@ def train_siamese_triplets_lstm(options_dict):
         rng, x1, x2, x3, m1, m2, m3, input_shape,
         filter_shape=options_dict["filter_shape"],
         n_lstm_hiddens=options_dict["n_hiddens"],
+        n_outputs=options_dict["embedding_dim"],
         output_type=options_dict["sequence_output_type"],
         srng=srng, dropout=options_dict["dropout_rates"])
 
