@@ -609,8 +609,8 @@ class BatchMultiLayerConvLSTM(object):
     Attributes:
     """
     def __init__(self, rng, input, mask, input_shape, filter_shape,
-                 n_hiddens, V=None, parameters=None, U=None, b=None,
-                 output_type="last", prefix="convlstms", truncate_gradient=-1, srng=None, dropout=0.0):
+                 n_hiddens, n_outputs=None, V=None, parameters=None, U=None, b=None,
+                 output_type="last", prefix="convlstms", truncate_gradient=-1, srng=None, dropout=0.0, out_W=None, out_b=None):
         """
         initialization for hidden is just done at the zero level
 
@@ -630,6 +630,10 @@ class BatchMultiLayerConvLSTM(object):
         self.n_in = filter_shape[0]
         self.n_hiddens = n_hiddens
         self.prefix = prefix
+        if n_outputs == None:
+            self.n_outputs = self.n_hiddens[-1]
+        else:
+            self.n_outputs = n_outputs
         
         if V is None:
             n_units_in = numpy.prod(filter_shape[1:])
@@ -656,7 +660,19 @@ class BatchMultiLayerConvLSTM(object):
             srng=self.srng, dropout=self.dropout)
         self.parameters = [self.V] + self.lstms.parameters
         self.l2 = self.lstms.l2 + (self.V**2).sum()
-        self.output = self.lstms.output
+        self.linear_layer = mlp.HiddenLayer(
+            rng=rng,
+            input=self.lstms.output,
+            d_in=self.n_hiddens[-1],
+            d_out=self.n_outputs,
+            activation=None,
+            W=out_W,
+            b=out_b)
+        self.out_W = self.linear_layer.W
+        self.out_b = self.linear_layer.b
+        self.l2 = self.l2 + (self.out_W**2).sum()
+        self.parameters += [self.out_W, self.out_b]
+        self.output = self.linear_layer.output
         self.dropout_output = self.lstms.dropout_output
 
 
@@ -664,11 +680,13 @@ class BatchMultiLayerConvLSTM(object):
         """Pickle the model parameters to opened file `f`."""
         pickle.dump(self.V.get_value(borrow=True), f, -1)
         self.lstms.save(f)
+        self.linear_layer.save(f)
 
     def load(self, f):
         """Load the model parameters from the opened pickle file `f`."""
         self.V.set_value(pickle.load(f), borrow=True)
         self.lstms.load(f)
+        self.linear_layer.load(f)
 
             
 class LSTM(object):
@@ -1177,6 +1195,8 @@ def test_multibatchconvlstm():
     f0 = theano.function(inputs=[x], outputs=x.reshape(input_shape))
     f = theano.function(inputs=[x], outputs=conv_out)
     fs = theano.function(inputs=[x, m], outputs=multi_lstm.output)
+    squared_values = theano.function(inputs=[x, m], outputs=(multi_lstm.output**2).sum(axis=1))
+    gradients = tensor.grad((multi_lstm.output**2).sum(axis=1).mean(), multi_lstm.parameters)
     import pdb; pdb.set_trace()
     xs = tensor.tensor3("xs", dtype=THEANOTYPE)
     mask = tensor.matrix("mask", dtype=THEANOTYPE)
