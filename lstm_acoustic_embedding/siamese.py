@@ -141,7 +141,7 @@ class SiameseTripletBatchConvLSTM(object):
         `x3_layers`, with corresponding additional layers when using dropout.
     """
 
-    def __init__(self, rng, input_x1, input_x2, input_x3, input_m1, input_m2, input_m3, input_shape, filter_shape, n_lstm_hiddens, n_outputs, prefix="triplet_convlstm", output_type="max", truncate_gradient=-1, srng=None, dropout=0.0):
+    def __init__(self, rng, input_x1, input_x2, input_x3, input_m1, input_m2, input_m3, input_shape, filter_shape, n_lstm_hiddens, n_outputs=None, prefix="triplet_convlstm", output_type="max", truncate_gradient=-1, srng=None, dropout=0.0):
         """
         Initialize symbolic parameters and expressions.
 
