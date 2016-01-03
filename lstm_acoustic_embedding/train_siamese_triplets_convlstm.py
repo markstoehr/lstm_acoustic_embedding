@@ -43,7 +43,7 @@ default_options_dict = {
     "data_dir": "../data/nonpadded_icassp15.0",
     # "data_dir": "data/tmp",
     "n_same_pairs": int(100e3), # if None, all same pairs are used
-    "n_hiddens": [512, 512],
+    "n_hiddens": [200, 200],
     "rnd_seed": 42,
     "batch_size": 100,
     "n_max_epochs": 20,
@@ -59,8 +59,10 @@ default_options_dict = {
     #     "learning_rate": 0.01,
     #     "momentum": 0.9
     #     },
-    "dropout_rates": None,      # a list of rates for each layer or None
+    "dropout_rates": 0.2,      # a list of rates for each layer or None
+    "use_dropout_loss": False,
     "sequence_output_type": "last", # use max over the series to get the vector output
+    "use_dropout_regularization": True,
     "filter_shape" : (96, 1, 9, 39),
     "embedding_dim" : None,
     "conv_layer_specs": [       # activation can be "sigmoid", "tanh", "relu", "linear"
@@ -241,11 +243,12 @@ def train_siamese_triplets_lstm(options_dict):
         n_lstm_hiddens=options_dict["n_hiddens"],
         n_outputs=options_dict["embedding_dim"],
         output_type=options_dict["sequence_output_type"],
-        srng=srng, dropout=options_dict["dropout_rates"])
+        srng=srng, dropout=options_dict["dropout_rates"],
+        use_dropout_regularization=options_dict["use_dropout_regularization"])
 
     
     if options_dict["loss"] == "hinge_cos":
-        if options_dict["dropout_rates"] is not None:
+        if options_dict["use_dropout_loss"]:
             loss = model.dropout_loss_hinge_cos(options_dict["margin"])
         else:
             loss = model.loss_hinge_cos(options_dict["margin"])
@@ -278,9 +281,10 @@ def train_siamese_triplets_lstm(options_dict):
             },
         mode=theano_mode,
         )
-
+    
 
     triplet = validate_triplet_iterator.__iter__().next()
+    import pdb; pdb.set_trace()
     test_model = theano.function(
         inputs=[x1_indices, x2_indices, x3_indices],
         outputs=outputs,
