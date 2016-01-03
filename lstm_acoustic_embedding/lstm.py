@@ -157,7 +157,7 @@ class BatchMultiLayerLSTM(object):
     """
     def __init__(self, rng, input, mask, n_in, n_hiddens, parameters=None,
                  output_type="last", prefix="lstms", truncate_gradient=-1,
-                 srng=None, dropout=0.0):
+                 srng=None, dropout=0.0, use_dropout_regularization=False):
         self.output_type = output_type
         self.dropout = dropout
         self.truncate_gradient = truncate_gradient
@@ -188,7 +188,10 @@ class BatchMultiLayerLSTM(object):
                 b = cur_parameters.pop()
 
             if self.layers:
-                input = self.layers[-1].output
+                if use_dropout_regularization:
+                    input = self.layers[-1].dropout_output
+                else:
+                    input = self.layers[-1].output
                 
             self.layers.append(
                 BatchLSTM(rng, input, mask, cur_in, n_hidden, W=W, U=U, b=b,
@@ -318,10 +321,12 @@ class BatchLSTM(object):
     input: (n_time_steps, n_sequences, n_dim)
     """
     def __init__(self, rng, input, mask, n_in, n_hidden, W=None, U=None, b=None,
-                 output_type="last", prefix="lstm", truncate_gradient=-1):
+                 output_type="last", prefix="lstm", truncate_gradient=-1,
+                 srng=None, dropout=0.0):
         self.truncate_gradient = truncate_gradient
         self.output_type = output_type
         self.input = input
+        self.dropout = dropout
         self.mask = mask
         self.n_hidden = n_hidden
         self.n_in = n_in
@@ -354,6 +359,11 @@ class BatchLSTM(object):
             
         self.input = input
         self.set_output()
+        if srng is not None and dropout is not None and dropout > 0.0:
+            self.dropout_output = theano_utils.apply_dropout(
+                srng, self.output, p=dropout)
+        else:
+            self.dropout_output = self.output
 
     def set_output(self):
         hidden_features = batch_lstm_function(self.input, self.mask, self.n_hidden, self.W, self.U, self.b,
@@ -610,7 +620,7 @@ class BatchMultiLayerConvLSTM(object):
     """
     def __init__(self, rng, input, mask, input_shape, filter_shape,
                  n_hiddens, n_outputs=None, V=None, parameters=None, U=None, b=None,
-                 output_type="last", prefix="convlstms", truncate_gradient=-1, srng=None, dropout=0.0, out_W=None, out_b=None):
+                 output_type="last", prefix="convlstms", truncate_gradient=-1, srng=None, dropout=0.0, out_W=None, out_b=None, use_dropout_regularization=False):
         """
         initialization for hidden is just done at the zero level
 
@@ -622,6 +632,7 @@ class BatchMultiLayerConvLSTM(object):
         self.truncate_gradient = truncate_gradient
         self.output_type = output_type
         self.dropout = dropout
+        self.use_dropout_regularization = use_dropout_regularization
         self.srng = srng
         self.input = input
         self.mask = mask
@@ -653,11 +664,16 @@ class BatchMultiLayerConvLSTM(object):
             filter_shape=self.filter_shape,
             image_shape=self.input_shape
             )[:, :, :, 0].swapaxes(1, 2).swapaxes(0, 1)
+        if self.use_dropout_regularization:
+            self.lstm_input = theano_utils.apply_dropout(
+                srng, self.conv_out, p=self.dropout)
+        else:
+            self.lstm_input = self.conv_out
         self.lstms = BatchMultiLayerLSTM(
-            rng, self.conv_out, self.mask[:self.conv_out.shape[0]], self.n_in, self.n_hiddens,
+            rng, self.lstm_input, self.mask[:self.conv_out.shape[0]], self.n_in, self.n_hiddens,
             parameters=parameters, output_type=self.output_type,
             prefix="%s_lstms" % self.prefix, truncate_gradient=self.truncate_gradient,
-            srng=self.srng, dropout=self.dropout)
+            srng=self.srng, dropout=self.dropout, use_dropout_regularization=self.use_dropout_regularization)
         self.parameters = [self.V] + self.lstms.parameters
         self.l2 = self.lstms.l2 + (self.V**2).sum()
         self.linear_layer = mlp.HiddenLayer(
@@ -673,7 +689,7 @@ class BatchMultiLayerConvLSTM(object):
         self.l2 = self.l2 + (self.out_W**2).sum()
         self.parameters += [self.out_W, self.out_b]
         self.output = self.linear_layer.output
-        self.dropout_output = self.lstms.dropout_output
+        self.dropout_output = self.output
 
 
     def save(self, f):
@@ -687,7 +703,6 @@ class BatchMultiLayerConvLSTM(object):
         self.V.set_value(pickle.load(f), borrow=True)
         self.lstms.load(f)
         self.linear_layer.load(f)
-
             
 class LSTM(object):
     """
