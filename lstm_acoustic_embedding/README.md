@@ -1,3 +1,15 @@
+# January 3, 2015
+
+Adjusted dropout output so that things now can run with dropout and I'll see
+whether that regularization works at all
+
+```bash
+python train_siamese_triplets_convlstm.py ../models/siamese_triplets_convlstm_dropout.1
+python apply_layers_convlstm.py ../models/siamese_triplets_convlstm_dropout.1 dev
+python eval_samediff.py ../models/siamese_triplets_convlstm_dropout.1/swbd.dev.layer_-1.npz 
+```
+
+
 # December 29, 2015
 
 # testing things on MLPs
