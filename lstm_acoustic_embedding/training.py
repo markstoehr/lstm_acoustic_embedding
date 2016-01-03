@@ -343,11 +343,11 @@ def train_fixed_epochs_with_validation(n_epochs, train_model,
                 logger.info(str(datetime.now()) + " triplet_id: %d" % triplet_id)
             train_losses.append(train_model(*triplet))
             break
-
+        logger.info("finished training bit")
         # Validate the model
         # validation_losses = [validate_model(*triplet) for triplet in validate_triplet_iterator]
-        triplet = validate_triplet_iterator
-        validation_losses = validate_model(*triplet)
+        triplet = validate_triplet_iterator.__iter__().next()
+        validation_losses = [validate_model(*triplet)]
         validation_loss = np.mean(validation_losses, axis=0)
         logger.info("Epoch " + str(i_epoch + 1) + ": "
             "validation loss: " + str(validation_loss)
