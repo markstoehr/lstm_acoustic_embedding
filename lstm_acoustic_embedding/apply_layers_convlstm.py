@@ -111,7 +111,7 @@ def apply_layers(model_dir, set, batch_size=None, i_layer=-1):
     n_x = len(ls)
     logger.info("Passing data through in model: " + str(n_x))
     embeddings = []
-    for x_i in range(1): # range(n_batches):
+    for x_i in range(n_batches):
         x_embeddings = apply_model(x_i)
         embeddings.extend(x_embeddings)
     embeddings = numpy.vstack(embeddings[:len(ls)])
