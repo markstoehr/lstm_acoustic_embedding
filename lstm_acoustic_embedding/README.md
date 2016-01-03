@@ -19,6 +19,7 @@ python eval_samediff.py ../models/siamese_triplets_convlstm_dropout.1/swbd.dev.l
 Ensuring that I can the convolutional LSTM
 
 ```bash
+mkdir -p ../models
 python train_siamese_triplets_convlstm.py ../models/siamese_triplets_convlstm.1
 python apply_layers_convlstm.py ../models/siamese_triplets_convlstm.1 dev
 python eval_samediff.py ../models/siamese_triplets_convlstm.1/swbd.dev.layer_-1.npz 
