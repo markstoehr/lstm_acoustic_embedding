@@ -141,7 +141,7 @@ class SiameseTripletBatchConvLSTM(object):
         `x3_layers`, with corresponding additional layers when using dropout.
     """
 
-    def __init__(self, rng, input_x1, input_x2, input_x3, input_m1, input_m2, input_m3, input_shape, filter_shape, n_lstm_hiddens, n_outputs, prefix="triplet_convlstm", output_type="max", truncate_gradient=-1, srng=None, dropout=0.0, use_dropout_regularization=False):
+    def __init__(self, rng, input_x1, input_x2, input_x3, input_m1, input_m2, input_m3, input_shape, filter_shape, n_lstm_hiddens, n_outputs, prefix="triplet_convlstm", output_type="max", truncate_gradient=-1, srng=None, dropout=0.0, use_dropout_regularization=False, stabilize_activations=None):
         """
         Initialize symbolic parameters and expressions.
 
@@ -177,20 +177,21 @@ class SiameseTripletBatchConvLSTM(object):
         self.srng = srng
         self.dropout = dropout
         self.truncate_gradient = truncate_gradient
+        self.stabilize_activations = stabilize_activations
         self.model = lstm.BatchMultiLayerConvLSTM(
             rng, input, mask, input_shape, filter_shape, n_lstm_hiddens, n_outputs=n_outputs,
-            output_type=self.output_type, prefix="%s_lstm" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout, use_dropout_regularization=self.use_dropout_regularization)
+            output_type=self.output_type, prefix="%s_lstm" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout, use_dropout_regularization=self.use_dropout_regularization, stabilize_activations=self.stabilize_activations)
         self.n_outputs = self.model.n_outputs
 
         self.x1_model = lstm.BatchMultiLayerConvLSTM(
             rng, input_x1, input_m1, input_shape, filter_shape, n_lstm_hiddens, n_outputs=self.n_outputs, V=self.model.V, parameters=self.model.parameters[1:],
-            output_type=self.output_type, prefix="%s_lstm1" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout, out_W=self.model.out_W, out_b=self.model.out_b, use_dropout_regularization=self.use_dropout_regularization)
+            output_type=self.output_type, prefix="%s_lstm1" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout, out_W=self.model.out_W, out_b=self.model.out_b, use_dropout_regularization=self.use_dropout_regularization, stabilize_activations=self.stabilize_activations)
         self.x2_model = lstm.BatchMultiLayerConvLSTM(
             rng, input_x2, input_m2, input_shape, filter_shape, n_lstm_hiddens, n_outputs=self.n_outputs, V=self.model.V, parameters=self.model.parameters[1:],
-            output_type=self.output_type, prefix="%s_lstm2" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout, out_W=self.model.out_W, out_b=self.model.out_b, use_dropout_regularization=self.use_dropout_regularization)
+            output_type=self.output_type, prefix="%s_lstm2" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout, out_W=self.model.out_W, out_b=self.model.out_b, use_dropout_regularization=self.use_dropout_regularization, stabilize_activations=self.stabilize_activations)
         self.x3_model = lstm.BatchMultiLayerConvLSTM(
             rng, input_x3, input_m3, input_shape, filter_shape, n_lstm_hiddens, n_outputs=self.n_outputs, V=self.model.V, parameters=self.model.parameters[1:],
-            output_type=self.output_type, prefix="%s_lstm3" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout, out_W=self.model.out_W, out_b=self.model.out_b, use_dropout_regularization=self.use_dropout_regularization)
+            output_type=self.output_type, prefix="%s_lstm3" % self.prefix, truncate_gradient=self.truncate_gradient, srng=self.srng, dropout=self.dropout, out_W=self.model.out_W, out_b=self.model.out_b, use_dropout_regularization=self.use_dropout_regularization, stabilize_activations=self.stabilize_activations)
 
         self.parameters = self.model.parameters
         self.l2 = self.model.l2
