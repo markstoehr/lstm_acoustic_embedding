@@ -157,7 +157,7 @@ class BatchMultiLayerLSTM(object):
     """
     def __init__(self, rng, input, mask, n_in, n_hiddens, parameters=None,
                  output_type="last", prefix="lstms", truncate_gradient=-1,
-                 srng=None, dropout=0.0, use_dropout_regularization=False):
+                 srng=None, dropout=0.0, use_dropout_regularization=False, stabilize_activations=None):
         self.output_type = output_type
         self.dropout = dropout
         self.truncate_gradient = truncate_gradient
@@ -167,6 +167,7 @@ class BatchMultiLayerLSTM(object):
         self.mask = mask
         self.n_in = n_in
         self.prefix = prefix
+        self.stabilize_activations = stabilize_activations
         # reverse and copy because we want to pop off the parameters
         if parameters is not None:
             cur_parameters = list(parameters)[::-1]
@@ -176,6 +177,7 @@ class BatchMultiLayerLSTM(object):
         self.parameters = []
         cur_in = n_in
         self.l2 = 0.
+        self.norm_stabilizer = 0.
         for layer_id, n_hidden in enumerate(n_hiddens):
             cur_output_type = output_type if layer_id == self.n_layers-1 else "all"
             if cur_parameters is None:
@@ -197,7 +199,10 @@ class BatchMultiLayerLSTM(object):
                 BatchLSTM(rng, input, mask, cur_in, n_hidden, W=W, U=U, b=b,
                           output_type=cur_output_type,
                           prefix="%s_%d" % (self.prefix, layer_id),
-                     truncate_gradient=self.truncate_gradient))
+                          truncate_gradient=self.truncate_gradient,
+                          stabilize_activations=self.stabilize_activations))
+            if self.stabilize_activations is not None:
+                self.norm_stabilizer += self.layers[-1].norm_stabilizer
             self.parameters.append(self.layers[-1].W)
             self.parameters.append(self.layers[-1].U)
             self.parameters.append(self.layers[-1].b)
@@ -322,7 +327,7 @@ class BatchLSTM(object):
     """
     def __init__(self, rng, input, mask, n_in, n_hidden, W=None, U=None, b=None,
                  output_type="last", prefix="lstm", truncate_gradient=-1,
-                 srng=None, dropout=0.0):
+                 srng=None, dropout=0.0, stabilize_activations=None):
         self.truncate_gradient = truncate_gradient
         self.output_type = output_type
         self.input = input
@@ -331,6 +336,7 @@ class BatchLSTM(object):
         self.n_hidden = n_hidden
         self.n_in = n_in
         self.prefix = prefix
+        self.stabilize_activations = stabilize_activations
         if W is None or U is None or b is None:
             WU_values = numpy.concatenate(
                 [ortho_weight(self.n_hidden + self.n_in)[:,
@@ -368,6 +374,10 @@ class BatchLSTM(object):
     def set_output(self):
         hidden_features = batch_lstm_function(self.input, self.mask, self.n_hidden, self.W, self.U, self.b,
                                         prefix=self.prefix, truncate_gradient=self.truncate_gradient)
+        if self.stabilize_activations is not None:
+            hidden_feature_norms = tensor.sqrt((hidden_features**2).sum(axis=1))
+            self.norm_stabilizer = ((hidden_feature_norms[1:] - hidden_featur_norms[:-1])**2).mean() * self.stabilize_activations
+            
         if self.output_type == "last":
             self.output = hidden_features[-1]
         elif self.output_type == "mean":
@@ -620,7 +630,7 @@ class BatchMultiLayerConvLSTM(object):
     """
     def __init__(self, rng, input, mask, input_shape, filter_shape,
                  n_hiddens, n_outputs=None, V=None, parameters=None, U=None, b=None,
-                 output_type="last", prefix="convlstms", truncate_gradient=-1, srng=None, dropout=0.0, out_W=None, out_b=None, use_dropout_regularization=False):
+                 output_type="last", prefix="convlstms", truncate_gradient=-1, srng=None, dropout=0.0, out_W=None, out_b=None, use_dropout_regularization=False, stabilize_activations=None):
         """
         initialization for hidden is just done at the zero level
 
@@ -641,6 +651,7 @@ class BatchMultiLayerConvLSTM(object):
         self.n_in = filter_shape[0]
         self.n_hiddens = n_hiddens
         self.prefix = prefix
+        self.stabilize_activations = stabilize_activations
         if n_outputs == None:
             self.n_outputs = self.n_hiddens[-1]
         else:
@@ -673,7 +684,11 @@ class BatchMultiLayerConvLSTM(object):
             rng, self.lstm_input, self.mask[:self.conv_out.shape[0]], self.n_in, self.n_hiddens,
             parameters=parameters, output_type=self.output_type,
             prefix="%s_lstms" % self.prefix, truncate_gradient=self.truncate_gradient,
-            srng=self.srng, dropout=self.dropout, use_dropout_regularization=self.use_dropout_regularization)
+            srng=self.srng, dropout=self.dropout, use_dropout_regularization=self.use_dropout_regularization, stabilize_activations=self.stabilizer_activations)
+        if self.stabilize_activations is not None:
+            self.norm_stabilizer = self.lstms.norm_stabilizers
+        else:
+            self.norm_stabilizer = 0.
         self.parameters = [self.V] + self.lstms.parameters
         self.l2 = self.lstms.l2 + (self.V**2).sum()
         self.linear_layer = mlp.HiddenLayer(
