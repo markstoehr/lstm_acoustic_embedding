@@ -75,6 +75,7 @@ default_options_dict = {
         ],
     "loss": "hinge_cos",        # can be "hinge_cos"
     "margin": 0.15,              # margin for hinge loss
+    "stabilize_activations": 500,
     }
 
 
@@ -244,7 +245,8 @@ def train_siamese_triplets_lstm(options_dict):
         n_outputs=options_dict["embedding_dim"],
         output_type=options_dict["sequence_output_type"],
         srng=srng, dropout=options_dict["dropout_rates"],
-        use_dropout_regularization=options_dict["use_dropout_regularization"])
+        use_dropout_regularization=options_dict["use_dropout_regularization"],
+        stabilize_activations=options_dict["stabilize_activations"])
 
     
     if options_dict["loss"] == "hinge_cos":
@@ -443,8 +445,12 @@ def load_siamese_triplets_convlstm_minibatch(options_dict):
         rng, x1, x2, x3, m1, m2, m3, input_shape,
         filter_shape=options_dict["filter_shape"],
         n_lstm_hiddens=options_dict["n_hiddens"],
+        n_outputs=options_dict["embedding_dim"],
         output_type=options_dict["sequence_output_type"],
-        srng=srng, dropout=options_dict["dropout_rates"])
+        srng=srng, dropout=options_dict["dropout_rates"],
+        use_dropout_regularization=options_dict["use_dropout_regularization"],
+        stabilize_activations=options_dict["stabilize_activations"]
+    )
 
     # Load saved parameters
     logger.info("Reading: " + model_fn)
