@@ -40,7 +40,7 @@ THEANOTYPE = theano.config.floatX
 #-----------------------------------------------------------------------------#
 
 default_options_dict = {
-    "data_dir": "../data/nonpadded_icassp15.0",
+    "data_dir": "../data/icassp15.0",
     # "data_dir": "data/tmp",
     "n_same_pairs": int(100e3), # if None, all same pairs are used
     "n_hiddens": [200, 200],
@@ -201,9 +201,9 @@ def train_siamese_triplets_lstm(options_dict):
 
     # Load into shared variables
     datasets = data_io.load_swbd_same_diff_mask(rng, options_dict["data_dir"], filter_length=options_dict["filter_shape"][-2])
-    train_x, train_mask, train_lengths, train_matches_vec, train_labels = datasets[0]
-    dev_x, dev_mask, dev_lengths, dev_matches_vec, dev_labels = datasets[1]
-    test_x, test_mask, test_lengths, test_matches_vec, test_labels = datasets[2]
+    train_x, train_mask, train_matches_vec, train_labels = datasets[0]
+    dev_x, dev_mask, dev_matches_vec, dev_labels = datasets[1]
+    test_x, test_mask, test_matches_vec, test_labels = datasets[2]
 
     # Make batch iterators
     train_triplet_iterator = BatchIteratorTriplets(
@@ -286,7 +286,6 @@ def train_siamese_triplets_lstm(options_dict):
     
 
     triplet = validate_triplet_iterator.__iter__().next()
-    import pdb; pdb.set_trace()
     test_model = theano.function(
         inputs=[x1_indices, x2_indices, x3_indices],
         outputs=outputs,
