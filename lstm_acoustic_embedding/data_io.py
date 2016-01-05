@@ -248,6 +248,10 @@ def load_swbd_same_diff(rng, data_dir):
         # Load data and shuffle
         npz = np.load(npz_fn)
         utt_ids = sorted(npz.keys())
+        while "width" in utt_ids:
+            utt_ids.remove("width")
+        while "padding" in utt_ids:
+            utt_ids.remove("padding")
         rng.shuffle(utt_ids)
         x = [npz[i] for i in utt_ids]
 
@@ -262,7 +266,45 @@ def load_swbd_same_diff(rng, data_dir):
 
     return datasets
 
-def load_swbd_same_diff_mask(rng, data_dir, filter_length=None, seq_length=200):
+def load_swbd_same_diff_mask(rng, data_dir, filter_length=None):
+
+    logger.info("Loading same and different pairs: " + data_dir)
+
+    datasets = []
+
+    for set in ["train", "dev", "test"]:
+
+        npz_fn = path.join(data_dir, "swbd." + set + ".npz")
+        width_fn = path.join(data_dir, "width." + set + ".npz")
+        padding_fn = path.join(data_dir, "padding." + set + ".npz")
+        logger.info("Reading: " + npz_fn)
+
+        # Load data and shuffle
+        npz = np.load(npz_fn)
+        widths = np.load(width_fn)
+        paddings = np.load(padding_fn)
+        utt_ids = sorted(npz.keys())
+        rng.shuffle(utt_ids)
+        x = [npz[i].T for i in utt_ids]
+        
+        # Get labels for each utterance
+        labels = swbd_utts_to_labels(utt_ids)
+
+        matches_vec = samediff.generate_matches_array(labels)
+        mask = np.zeros((len(x), len(x[0])), dtype=THEANOTYPE)
+        for i, utt_id in enumerate(utt_ids):
+            padding = int(paddings[utt_id])
+            width = int(widths[utt_id])
+            mask[i][padding: padding + width] = 1.0
+                
+        shared_x = theano.shared(np.asarray(x, dtype=THEANOTYPE), borrow=True)
+        shared_m = theano.shared(mask, borrow=True)
+        # Create a tuple for this set and add to `data_sets`
+        datasets.append((shared_x, shared_m, matches_vec, labels))
+
+    return datasets
+
+def load_swbd_same_diff_mask_old(rng, data_dir, filter_length=None, seq_length=200):
 
     logger.info("Loading same and different pairs: " + data_dir)
 
