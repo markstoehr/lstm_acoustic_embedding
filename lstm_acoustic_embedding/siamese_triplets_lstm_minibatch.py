@@ -39,7 +39,7 @@ THEANOTYPE = theano.config.floatX
 #-----------------------------------------------------------------------------#
 
 default_options_dict = {
-    "data_dir": "../data/nonpadded_icassp15.0",
+    "data_dir": "../data/icassp15.0",
     # "data_dir": "data/tmp",
     "n_same_pairs": int(100e3), # if None, all same pairs are used
     "n_hiddens": [256, 256],
@@ -194,10 +194,10 @@ def train_siamese_triplets_lstm(options_dict):
     # Load and format data
 
     # Load into shared variables
-    datasets = data_io.load_swbd_same_diff_mask(rng, options_dict["data_dir"])
-    train_x, train_mask, train_lengths, train_matches_vec, train_labels = datasets[0]
-    dev_x, dev_mask, dev_lengths, dev_matches_vec, dev_labels = datasets[1]
-    test_x, test_mask, test_lengths, test_matches_vec, test_labels = datasets[2]
+    datasets = data_io.load_swbd_same_diff_mask(rng, options_dict["data_dir"], filter_length=200)
+    train_x, train_mask, train_matches_vec, train_labels = datasets[0]
+    dev_x, dev_mask, dev_matches_vec, dev_labels = datasets[1]
+    test_x, test_mask, test_matches_vec, test_labels = datasets[2]
 
     # Make batch iterators
     train_triplet_iterator = BatchIteratorTriplets(
@@ -259,12 +259,12 @@ def train_siamese_triplets_lstm(options_dict):
         inputs=[x1_indices, x2_indices, x3_indices],
         outputs=outputs,
         givens={
-            x1: dev_x[x1_indices].swapaxes(0, 1)[:dev_lengths[x1_indices].max()],
-            m1: dev_mask[x1_indices].T[:dev_lengths[x1_indices].max()],
-            x2: dev_x[x2_indices].swapaxes(0, 1)[:dev_lengths[x2_indices].max()],
-            m2: dev_mask[x2_indices].T[:dev_lengths[x2_indices].max()],
-            x3: dev_x[x3_indices].swapaxes(0, 1)[:dev_lengths[x3_indices].max()],
-            m3: dev_mask[x3_indices].T[:dev_lengths[x3_indices].max()],
+            x1: dev_x[x1_indices].swapaxes(0, 1),
+            m1: dev_mask[x1_indices].T,
+            x2: dev_x[x2_indices].swapaxes(0, 1),
+            m2: dev_mask[x2_indices].T,
+            x3: dev_x[x3_indices].swapaxes(0, 1),
+            m3: dev_mask[x3_indices].T,
             },
         mode=theano_mode,
         )
@@ -272,12 +272,12 @@ def train_siamese_triplets_lstm(options_dict):
         inputs=[x1_indices, x2_indices, x3_indices],
         outputs=outputs,
         givens={
-            x1: test_x[x1_indices].swapaxes(0, 1)[:test_lengths[x1_indices].max()],
-            m1: test_mask[x1_indices].T[:test_lengths[x1_indices].max()],
-            x2: test_x[x2_indices].swapaxes(0, 1)[:test_lengths[x2_indices].max()],
-            m2: test_mask[x2_indices].T[:test_lengths[x2_indices].max()],
-            x3: test_x[x3_indices].swapaxes(0, 1)[:test_lengths[x3_indices].max()],
-            m3: test_mask[x3_indices].T[:test_lengths[x3_indices].max()],
+            x1: test_x[x1_indices].swapaxes(0, 1),
+            m1: test_mask[x1_indices].T,
+            x2: test_x[x2_indices].swapaxes(0, 1),
+            m2: test_mask[x2_indices].T,
+            x3: test_x[x3_indices].swapaxes(0, 1),
+            m3: test_mask[x3_indices].T,
             },
         mode=theano_mode,
         )
@@ -314,6 +314,23 @@ def train_siamese_triplets_lstm(options_dict):
     else:
         assert False, "Invalid learning rule: " + learning_rule["type"]
 
+    train_model_gradients = theano.function(
+        inputs=[x1_indices, x2_indices, x3_indices],
+        outputs=gradients,
+        givens={
+            x1: train_x[x1_indices].swapaxes(0, 1),
+            m1: train_mask[x1_indices].T,
+            x2: train_x[x2_indices].swapaxes(0, 1),
+            m2: train_mask[x2_indices].T,
+            x3: train_x[x3_indices].swapaxes(0, 1),
+            m3: train_mask[x3_indices].T,
+            },
+        mode=theano_mode,
+        )
+
+    triplet = validate_triplet_iterator.__iter__().next()
+    import pdb; pdb.set_trace()
+    train_grads_example = train_model_gradients(*triplet)
 
     # Compile training function
     train_model = theano.function(
@@ -321,12 +338,12 @@ def train_siamese_triplets_lstm(options_dict):
         outputs=outputs,
         updates=updates,
         givens={
-            x1: train_x[x1_indices].swapaxes(0, 1)[:train_lengths[x1_indices].max()],
-            m1: train_mask[x1_indices].T[:train_lengths[x1_indices].max()],
-            x2: train_x[x2_indices].swapaxes(0, 1)[:train_lengths[x2_indices].max()],
-            m2: train_mask[x2_indices].T[:train_lengths[x2_indices].max()],
-            x3: train_x[x3_indices].swapaxes(0, 1)[:train_lengths[x3_indices].max()],
-            m3: train_mask[x3_indices].T[:train_lengths[x3_indices].max()],
+            x1: train_x[x1_indices].swapaxes(0, 1),
+            m1: train_mask[x1_indices].T,
+            x2: train_x[x2_indices].swapaxes(0, 1),
+            m2: train_mask[x2_indices].T,
+            x3: train_x[x3_indices].swapaxes(0, 1),
+            m3: train_mask[x3_indices].T,
             },
         mode=theano_mode,
         )
