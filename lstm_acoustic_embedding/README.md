@@ -1,3 +1,23 @@
+# January 4, 2015
+
+Main realization was that I was computing the features and using the data
+wrong. The padding for the examples was actually on both sides and I learn my
+lesson for not actually running through the padding function to see what was
+going on.
+
+Examining:
+{'conv_layer_specs': [{'activation': 'relu', 'filter_shape': (96, 1, 39, 9), 'pool_shape': (1, 3)}, {'activation': 'relu\
+', 'filter_shape': (96, 96, 1, 8), 'pool_shape': (1, 3)}], 'n_hiddens': [256, 256], 'rnd_seed': 42, 'l1_weight': 0.0, 'batch_size': 128, 'n_max\
+_epochs': 20, 'dropout_rates': None, 'learning_rule': {'epsilon': 1e-06, 'type': 'adadelta', 'rho': 0.9}, 'l2_weight': 0.0, 'use_dropout_loss':\
+ False, 'sequence_output_type': 'last', 'loss': 'hinge_cos', 'data_dir': '../data/icassp15.0', 'filter_shape': (96, 1, 9, 39), 'embedding_dim':\
+ None, 'stabilize_activations': None, 'use_dropout_regularization': False, 'model_dir': '../models/siamese_triplets_convlstm.1', 'hidden_layer_\
+specs':
+[{'units': 2048, 'activation': 'relu'}, {'units': 1024, 'activation': 'linear'}],
+'margin': 0.15, 'n_same_pairs': 100000}
+
+
+
+
 # January 3, 2015
 
 Adjusted dropout output so that things now can run with dropout and I'll see
