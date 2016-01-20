@@ -1,3 +1,11 @@
+# January 20, 2015
+
+## Checking gradient clipping first is to just check the gradients
+
+```bash
+python siamese_triplets_lstm_minibatch.py ../models/siamese_triplets_lstm_minibatch.1
+```
+
 # January 3, 2015
 
 Adjusted dropout output so that things now can run with dropout and I'll see
